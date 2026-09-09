@@ -1,34 +1,19 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>フロスト・ディフェンス v10</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;background:#0b1526;font-family:'Hiragino Sans','Noto Sans JP',sans-serif;touch-action:none;user-select:none}
-canvas{display:block}
-.overlay{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(6,14,30,.82);color:#eaf4ff;z-index:20;text-align:center;padding:24px}
-.overlay h1{font-size:clamp(24px,6.5vw,42px);letter-spacing:.06em;margin-bottom:8px;text-shadow:0 0 24px #4db2ff}.overlay h2{font-size:clamp(13px,3.4vw,17px);color:#9fd0ff;font-weight:400;margin-bottom:20px}.overlay p{font-size:clamp(12px,3.2vw,15px);line-height:1.9;color:#c8dcf0;max-width:560px;margin-bottom:24px}.btn{background:linear-gradient(180deg,#ff9b3d,#e05f1a);border:none;color:#fff;font-weight:700;font-size:clamp(16px,4.4vw,21px);padding:15px 50px;border-radius:999px;cursor:pointer;box-shadow:0 6px 0 #a33f0c,0 10px 24px rgba(255,140,50,.35)}.btn:active{transform:translateY(4px);box-shadow:0 2px 0 #a33f0c}
-#hud{position:fixed;top:10px;left:0;right:0;display:flex;gap:8px;justify-content:center;padding:0 10px;z-index:12;pointer-events:none;flex-wrap:wrap}.chip{background:linear-gradient(180deg,rgba(20,48,81,.94),rgba(10,23,43,.92));border:1px solid rgba(255,209,112,.28);border-radius:14px;padding:8px 12px;color:#f3f8ff;font-size:clamp(11px,3vw,14px);font-weight:800;backdrop-filter:blur(6px);box-shadow:0 6px 18px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.08)}
-#crosshair{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;color:#fff;text-shadow:0 0 4px #000;font-size:18px;opacity:.85}.hidden{display:none!important}
-#phaseBar{position:fixed;top:70px;left:50%;transform:translateX(-50%);width:min(54vw,290px);height:10px;border-radius:999px;background:rgba(8,20,38,.68);overflow:hidden;z-index:11;border:1px solid rgba(255,255,255,.16);pointer-events:none;box-shadow:0 5px 16px rgba(0,0,0,.22)}#phaseFill{height:100%;width:100%;background:linear-gradient(90deg,#72d1ff,#ffd36b 70%,#ff9b55);transition:width .15s linear}
-#missionCard,#objective,#autoHint,#miniTip{display:none!important}#combo{position:fixed;right:14px;top:104px;color:#ffe4a7;font-weight:900;font-size:20px;z-index:11;text-shadow:0 2px 8px rgba(0,0,0,.65);pointer-events:none;opacity:0;transition:opacity .2s}
-#joyZone{position:fixed;left:0;bottom:0;width:100%;height:48%;z-index:8;background:transparent!important;-webkit-tap-highlight-color:transparent;outline:none;contain:layout style}#joyBase{position:fixed;width:124px;height:124px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.25);display:none;z-index:9;pointer-events:none}#joyKnob{position:fixed;width:54px;height:54px;border-radius:50%;background:rgba(255,255,255,.35);display:none;z-index:9;pointer-events:none}
-#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:rgba(20,40,70,.92);color:#ffe9c4;padding:8px 18px;border-radius:999px;font-size:clamp(12px,3.4vw,15px);z-index:15;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}#flash{position:fixed;inset:0;background:radial-gradient(circle,transparent 40%,rgba(255,30,30,.45));opacity:0;pointer-events:none;z-index:7;transition:opacity .15s}
-#upgrade{background:rgba(4,10,20,.88)}#upgradeCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;width:min(94vw,680px)}.upCard{border:1px solid rgba(150,205,255,.35);background:linear-gradient(180deg,rgba(32,63,97,.95),rgba(15,34,58,.96));border-radius:16px;padding:15px 10px;color:#fff;cursor:pointer;box-shadow:0 8px 25px rgba(0,0,0,.25)}.upCard b{display:block;font-size:clamp(15px,3.7vw,20px);margin:7px 0}.upCard span{font-size:clamp(11px,2.9vw,13px);line-height:1.45;color:#c8dcf0}.upCard:active{transform:scale(.97)}
-#waveBanner{position:fixed;left:50%;top:34%;transform:translate(-50%,-50%) scale(.9);z-index:16;pointer-events:none;color:#fff;font-weight:1000;font-size:clamp(28px,7vw,54px);letter-spacing:.08em;text-align:center;text-shadow:0 5px 18px rgba(0,0,0,.65),0 0 24px rgba(116,188,255,.5);opacity:0;transition:opacity .2s,transform .25s}#waveBanner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
-.worldPop{position:fixed;z-index:14;pointer-events:none;font-weight:1000;font-size:14px;color:#fff;text-shadow:0 2px 5px rgba(0,0,0,.7);animation:popRise .75s ease-out forwards;white-space:nowrap}@keyframes popRise{0%{opacity:0;transform:translate(-50%,10px) scale(.75)}20%{opacity:1;transform:translate(-50%,0) scale(1.1)}100%{opacity:0;transform:translate(-50%,-34px) scale(1)}}
-.worldLabel,.baseWorldLabel{display:none!important}.groundHud{position:fixed;z-index:13;pointer-events:none;transform:translate(-50%,-50%);min-width:74px;padding:4px 7px;border-radius:9px;background:rgba(5,16,31,.78);border:1px solid rgba(255,216,139,.55);color:#fff;font-size:10px;font-weight:1000;line-height:1.15;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.32);text-align:center;text-shadow:0 1px 2px rgba(0,0,0,.7)}.groundHud .cost{display:block;margin-top:2px;font-size:10px;font-weight:900}.groundHud.ready{border-color:#8dffb4;box-shadow:0 0 12px rgba(90,255,150,.55);animation:groundPulse .8s ease-in-out infinite alternate}.groundHud.locked{opacity:.58}@keyframes groundPulse{to{transform:translate(-50%,-50%) scale(1.08)}}
-#baseBadge{position:fixed;right:12px;top:92px;z-index:12;pointer-events:none;background:linear-gradient(180deg,rgba(38,64,92,.94),rgba(12,27,49,.92));border:1px solid rgba(255,215,130,.35);border-radius:14px;padding:7px 10px;color:#fff;font-size:12px;font-weight:900;box-shadow:0 6px 18px rgba(0,0,0,.22)}#baseBadge span{color:#ffd98b}
-@media(max-width:560px){#upgradeCards{grid-template-columns:1fr}.upCard{padding:11px 12px}#phaseBar{top:98px;width:min(60vw,230px)}#baseBadge{top:130px}}
-</style></head><body>
-<div id="hud" class="hidden"><div class="chip">🌲<span id="wood">0</span></div><div class="chip">🪨<span id="coal">0</span></div><div class="chip">⚙️<span id="iron">0</span></div><div class="chip">📅Day <span id="day">1</span> <span id="phase">日中</span></div><div class="chip">🌡️<span id="temp">-10</span>℃</div><div class="chip">🔥<span id="fire">100</span>%</div><div class="chip">🏰Lv<span id="baseLv">1</span> <span id="base">100</span>%</div></div>
-<div id="phaseBar" class="hidden"><div id="phaseFill"></div></div><div id="baseBadge" class="hidden">🏰 拠点 <span>Lv.1</span></div><div id="missionCard" class="hidden"><div id="objective"></div><div id="miniTip"></div></div><div id="combo">COMBO x<span id="comboN">2</span></div><div id="joyZone"></div><div id="joyBase"></div><div id="joyKnob"></div><div id="autoHint" class="hidden"></div><div id="waveBanner"></div><div id="toast"></div><div id="flash"></div>
-<div id="title" class="overlay"><h1>❄️ フロスト・ディフェンス</h1><h2>— 爽快感強化 v10 —</h2><p><b>移動だけで遊べます。</b><br>採集・建築・領土確保・戦闘は自動。</p><button class="btn" id="startBtn">ゲーム開始</button></div>
-<div id="gameover" class="overlay hidden"><h1 id="goTitle"></h1><h2 id="goSub"></h2><p id="goStat"></p><button class="btn" id="retryBtn">もう一度挑戦</button></div><div id="upgrade" class="overlay hidden"><h1>✨ 生存ボーナス</h1><h2>次の夜に備えて1つ強化</h2><div id="upgradeCards"></div></div>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script>
-/* v10 standalone runtime injected from local tested build */
-</script>
-</body></html>
+<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"><title>フロスト・ディフェンス v9</title><link rel="stylesheet" href="style-v9.css"></head><body>
+<div id="hud" class="hidden">
+  <div class="chip">🌲<span id="wood">0</span></div>
+  <div class="chip">🪨<span id="coal">0</span></div>
+  <div class="chip">⚙️<span id="iron">0</span></div>
+  <div class="chip">📅Day <span id="day">1</span> <span id="phase">日中</span></div>
+  <div class="chip">🌡️<span id="temp">-10</span>℃</div>
+  <div class="chip">🔥<span id="fire">100</span>%</div>
+  <div class="chip">🏰Lv<span id="baseLv">1</span> <span id="base">100</span>%</div>
+</div>
+<div id="crosshair" class="hidden">+</div>
+<div id="phaseBar" class="hidden"><div id="phaseFill"></div></div>
+<div id="baseBadge" class="hidden">🏰 拠点 <span>Lv.1</span></div>
+<div id="missionCard" class="hidden"><div class="missionLabel">MISSION</div><div id="objective"></div><div id="miniTip"></div></div>
+<div id="combo">COMBO x<span id="comboN">2</span></div><div id="modeRow" class="hidden"></div><button id="actBtn" class="hidden"></button><button id="fuelBtn" class="hidden"></button><div id="joyZone"></div><div id="joyBase"></div><div id="joyKnob"></div><div id="autoHint" class="hidden"></div><div id="waveBanner"></div><div id="toast"></div><div id="flash"></div>
+<div id="title" class="overlay"><h1>❄️ フロスト・ディフェンス</h1><h2>— 領土拡張 × 細密ボクセル防衛 —</h2><p><b>操作は移動だけ。</b><br>採集・建築・外部拠点の確保・戦闘は自動。</p><button class="btn" id="startBtn">ゲーム開始</button></div>
+<div id="gameover" class="overlay hidden"><h1 id="goTitle">🧊 焚き火が消えた…</h1><h2 id="goSub"></h2><p id="goStat"></p><button class="btn" id="retryBtn">もう一度挑戦</button></div>
+<div id="upgrade" class="overlay hidden"><h1>✨ 生存ボーナス</h1><h2>次の夜に備えて1つ強化</h2><div id="upgradeCards"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script><script src="v9-1.js"></script><script src="v9-2.js"></script><script src="v9-3.js"></script><script src="v9-4.js"></script><script src="v9-5.js"></script><script src="v9-6.js"></script><script src="v9-7.js"></script></body></html>
