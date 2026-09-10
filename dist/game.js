@@ -197,7 +197,8 @@ function buildTerrain() {
   while (placed < 42 && guard++ < 2200) {
     const x = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0,
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 6) continue;
+    if (Math.max(Math.abs(x), Math.abs(z)) < 6 || isReservedBuildArea(x, z))
+      continue;
     if (Math.abs(x) <= 4 && z >= 2 && z <= 11) continue;
     let ok = true;
     for (let y = 1; y <= 5; y++)
@@ -212,7 +213,11 @@ function buildTerrain() {
         if (!blockAt(x + dx, 4, z + dz))
           blocks.set(key(x + dx, 4, z + dz), { t: "leaf", hp: 0 });
     blocks.set(key(x, 5, z), { t: "leaf", hp: 0 });
-    if (Math.random() < 0.35 && !blockAt(x + 2, 1, z + 1)) {
+    if (
+      Math.random() < 0.35 &&
+      !blockAt(x + 2, 1, z + 1) &&
+      !isReservedBuildArea(x + 2, z + 1)
+    ) {
       for (let y = 1; y <= 2; y++)
         blocks.set(key(x + 2, y, z + 1), { t: "wood", hp: 0 });
       if (!blockAt(x + 2, 3, z + 1))
@@ -225,7 +230,12 @@ function buildTerrain() {
   while (placed < 22 && guard++ < 1400) {
     const x = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0,
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 6 || blockAt(x, 1, z)) continue;
+    if (
+      Math.max(Math.abs(x), Math.abs(z)) < 6 ||
+      blockAt(x, 1, z) ||
+      isReservedBuildArea(x, z)
+    )
+      continue;
     blocks.set(key(x, 1, z), { t: "coal", hp: 0 });
     if (Math.random() < 0.75 && !blockAt(x, 2, z))
       blocks.set(key(x, 2, z), { t: "coal", hp: 0 });
@@ -1083,7 +1093,8 @@ function initOutposts() {
         3.25,
         0.88,
       );
-    tag.position.set(x, 0.56, z + 2.15);
+    tag.position.set(x, 0.56, z);
+    tag.userData.radius = 2.4;
     outposts.push({
       type,
       x,
@@ -1224,68 +1235,41 @@ function requiredBaseLevel(type) {
   return type === "wall" || type === "turret" ? 1 : type === "flame" ? 2 : 3;
 }
 
-function addBuildPads() {
+function buildPadDefinitions() {
   const defs = [];
-  for (const x of [-6, -3, 0, 3, 6]) {
-    defs.push([x, -6, "wall", 15]);
-    defs.push([x, 6, "wall", 15]);
-  }
-  for (const z of [-3, 0, 3]) {
-    defs.push([-6, z, "wall", 15]);
-    defs.push([6, z, "wall", 15]);
-  }
+  for (const x of [-5, 0, 5])
+    for (const z of [-6, 6]) defs.push([x, z, "wall", 15]);
+  for (const z of [-3, 3])
+    for (const x of [-8, 8]) defs.push([x, z, "wall", 15]);
   defs.push(
     [-8, -8, "turret", 40],
     [8, -8, "turret", 40],
     [-8, 8, "turret", 40],
     [8, 8, "turret", 40],
   );
-  defs.push([0, -10, "flame", 55], [0, 10, "flame", 55]);
-  defs.push([-10, 0, "warehouse", 45], [10, 0, "warehouse", 45]);
-  defs.forEach(([x, z, type, cost], i) => {
-    const g = new THREE.Group(),
-      c =
-        type === "turret"
-          ? 0x67b7ff
-          : type === "flame"
-            ? 0xff8b55
-            : type === "warehouse"
-              ? 0x9de3a0
-              : 0xffd36b,
-      ring = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          type === "wall" ? 1.28 : 0.78,
-          type === "wall" ? 1.28 : 0.78,
-          0.07,
-          32,
-        ),
-        new THREE.MeshBasicMaterial({
-          color: c,
-          transparent: true,
-          opacity: 0.27,
-        }),
-      );
-    ring.position.y = 0.57;
-    g.add(ring);
-    const core = box(
-      type === "wall" ? 1.15 : 0.46,
-      0.08,
-      type === "wall" ? 0.22 : 0.46,
-      c,
-    );
-    core.position.y = 0.66;
-    g.add(core);
+  defs.push(
+    [0, -10, "flame", 55],
+    [0, 10, "flame", 55],
+    [-10, 0, "warehouse", 45],
+    [10, 0, "warehouse", 45],
+  );
+  return defs;
+}
+function isReservedBuildArea(x, z) {
+  return buildPadDefinitions().some(
+    ([bx, bz, type]) => distanceToDefense(type, bx, bz, x, z) < 1,
+  );
+}
+function addBuildPads() {
+  buildPadDefinitions().forEach(([x, z, type, cost], index) => {
+    // One footprint outline, at the actual building location. No second disc or offset marker.
+    const g = new THREE.Group();
     g.position.set(x, 0, z);
     scene.add(g);
-    const gc = getBuildCost({ type, cost }),
-      tag = makeGroundTag(
-        typeIcon(type) + " " + typeName(type),
-        "🌲" + gc.wood + (gc.coal ? "  🪨" + gc.coal : ""),
-        c,
-        2.7,
-        0.8,
-      );
-    tag.position.set(x, 0.56, z + 1.45);
+    const tag = makeGroundTag(typeIcon(type), "");
+    tag.position.set(x, 0.56, z);
+    setTagFootprint(tag, type, x, z);
+    tag.userData.pad = true;
     buildPads.push({
       g,
       x,
@@ -1294,7 +1278,7 @@ function addBuildPads() {
       cost,
       built: false,
       progress: 0,
-      index: i,
+      index,
       tag,
     });
   });
@@ -1342,8 +1326,8 @@ function addWallDecor(x, y, z, level = 1) {
   for (let i = -4; i <= 4; i++) {
     const post = box(0.26, 1.75, 0.26, level >= 3 ? 0xd8b06d : 0x8b5c32);
     post.position.y = 1.05;
-    if (tangent === "x") post.position.x = i * 0.32;
-    else post.position.z = i * 0.32;
+    if (tangent === "x") post.position.x = i * 0.45;
+    else post.position.z = i * 0.45;
     g.add(post);
     const tip = box(0.19, 0.32, 0.19, 0xe3c084);
     tip.position.copy(post.position);
@@ -1352,9 +1336,9 @@ function addWallDecor(x, y, z, level = 1) {
     g.add(tip);
   }
   const rail1 = box(
-    tangent === "x" ? 2.9 : 0.22,
+    tangent === "x" ? 3.9 : 0.22,
     0.18,
-    tangent === "x" ? 0.22 : 2.9,
+    tangent === "x" ? 0.22 : 3.9,
     0x694421,
   );
   rail1.position.y = 1.05;
@@ -1364,9 +1348,9 @@ function addWallDecor(x, y, z, level = 1) {
   g.add(rail2);
   if (level >= 2) {
     const cap = box(
-      tangent === "x" ? 3.05 : 0.3,
+      tangent === "x" ? 4 : 0.3,
       0.14,
-      tangent === "x" ? 0.3 : 3.05,
+      tangent === "x" ? 0.3 : 4,
       0xd5a35e,
     );
     cap.position.y = 1.92;
@@ -1381,6 +1365,10 @@ function addWallDecor(x, y, z, level = 1) {
     );
     g.add(banner);
   }
+  const f = defenseFootprint("wall", x, z),
+    foundation = box(f.width, 0.1, f.depth, 0x72543a);
+  foundation.position.y = 0.05;
+  g.add(foundation);
   g.position.set(x, y - 0.5, z);
   scene.add(g);
   wallDecorObjs.set(k, g);
@@ -1471,6 +1459,21 @@ function addTurretVisual(x, y, z, level = 1) {
       [0.12, 0.38, 0.12, 0x8fe5ff, -0.42, 2.08, 0],
       [0.12, 0.38, 0.12, 0x8fe5ff, 0.42, 2.08, 0],
     ]);
+  for (const m of g.children) {
+    m.position.x *= 1.6;
+    m.position.z *= 1.6;
+    m.scale.x *= 1.6;
+    m.scale.z *= 1.6;
+  }
+  const platform = box(2, 0.12, 2, 0x53677d);
+  platform.position.y = -0.44;
+  g.add(platform);
+  for (const px of [-0.8, 0.8])
+    for (const pz of [-0.8, 0.8]) {
+      const post = box(0.18, 1.9, 0.18, 0x765634);
+      post.position.set(px, 0.55, pz);
+      g.add(post);
+    }
   g.position.set(x, y, z);
   scene.add(g);
   g.userData.level = level;
@@ -1488,11 +1491,11 @@ function refreshDefenseVisual(x, y, z) {
 
 function findUpgradeableDefenseNear() {
   let best = null,
-    bd = 1.45;
+    bd = 0.7;
   defenseState.forEach((st, k) => {
     if (st.level >= MAX_DEF_LV) return;
     const [x, y, z] = k.split(",").map(Number),
-      d = Math.hypot(x - pPos.x, z - pPos.z);
+      d = distanceToDefense(st.type, x, z);
     if (d < bd) {
       bd = d;
       best = { x, y, z, state: st };
@@ -1543,8 +1546,15 @@ function upgradeDefense(hit) {
 }
 
 function updateDefenseUpgrades(dt) {
-  if (phase !== "day") return;
-  const hit = findUpgradeableDefenseNear();
+  const hit =
+    phase === "day" &&
+    !movementRequested() &&
+    !defenseActionConsumed &&
+    !nearestBuildPad()
+      ? findUpgradeableDefenseNear()
+      : null;
+  for (const st of defenseState.values())
+    if (st !== hit?.state) st._progress = 0;
   if (!hit) return;
   const st = hit.state,
     cost = getUpgradeCost(st);
@@ -1559,9 +1569,9 @@ function updateDefenseUpgrades(dt) {
         2,
         new THREE.Vector3(hit.x, 1.2, hit.z),
       );
-    if (st._progress > 0.48) {
+    if (st._progress >= 0.8) {
       st._progress = 0;
-      upgradeDefense(hit);
+      if (upgradeDefense(hit)) defenseActionConsumed = true;
     }
   } else {
     st._progress = 0;
@@ -1702,16 +1712,10 @@ function buildPlayer() {
 
 function solidAt(x, z) {
   for (const [k, st] of defenseState) {
-    if (st.type !== "wall") continue;
-    const [wx, wy, wz] = k.split(",").map(Number),
-      tangent = Math.abs(wx) >= Math.abs(wz) ? "z" : "x",
-      along = tangent === "x" ? Math.abs(x - wx) : Math.abs(z - wz),
-      across = tangent === "x" ? Math.abs(z - wz) : Math.abs(x - wx);
-    if (along <= 1.52 && across <= 0.48) return blockAt(wx, wy, wz);
-  }
-  for (let y = 1; y <= 2; y++) {
-    const b = blockAt(Math.round(x), y, Math.round(z));
-    if (b && ["wall", "turret", "flame", "warehouse"].includes(b.t)) return b;
+    const [bx, by, bz] = k.split(",").map(Number),
+      f = defenseFootprint(st.type, bx, bz);
+    if (Math.abs(x - bx) <= f.width / 2 && Math.abs(z - bz) <= f.depth / 2)
+      return blockAt(bx, by, bz);
   }
   return null;
 }
@@ -2218,7 +2222,13 @@ function updateProjectiles(dt, t) {
         Math.round(a.m.position.y),
         Math.round(a.m.position.z),
       );
-      if (c) dead = true;
+      if (
+        c ||
+        (a.m.position.y >= 0.5 &&
+          a.m.position.y < 1.5 &&
+          solidAt(a.m.position.x, a.m.position.z))
+      )
+        dead = true;
     }
     if (dead) {
       disposeObject(a.m);
@@ -2379,7 +2389,8 @@ function spawnResourceNode(type) {
   for (let guard = 0; guard < 120; guard++) {
     const x = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0,
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 7) continue;
+    if (Math.max(Math.abs(x), Math.abs(z)) < 7 || isReservedBuildArea(x, z))
+      continue;
     if (blockAt(x, 1, z) || blockAt(x, 2, z) || blockAt(x, 3, z)) continue;
     if (type === "tree") {
       for (let y = 1; y <= 3; y++)
@@ -2610,6 +2621,7 @@ function setGroundTag(g, title, sub = "", accent = "#ffd36b") {
   const sig = title + "|" + sub + "|" + accent;
   if (g.userData.last === sig) return;
   g.userData.last = sig;
+  g.userData.accent = accent;
   g.userData.el.innerHTML =
     title + (sub ? '<span class="cost">' + sub + "</span>" : "");
   g.userData.el.style.borderColor =
@@ -2620,6 +2632,7 @@ function setGroundTag(g, title, sub = "", accent = "#ffd36b") {
 }
 function setTagState(tag, { ready = false, locked = false } = {}) {
   tag.userData.ready = ready;
+  tag.userData.locked = locked;
   tag.userData.el.className =
     "groundHud" + (ready ? " ready" : "") + (locked ? " locked" : "");
 }
@@ -2651,7 +2664,8 @@ function canAfford(c) {
 function ensureBaseGroundTag() {
   if (!baseGroundTag) {
     baseGroundTag = makeGroundTag("🏰 Lv.1", "");
-    baseGroundTag.position.set(0, 0.56, 2.25);
+    baseGroundTag.position.set(0, 0.56, 0);
+    baseGroundTag.userData.radius = 2.8;
   }
   const c = baseUpgradeCost(),
     ready = phase === "day" && baseLevel < 5 && canAfford(c);
@@ -2679,18 +2693,27 @@ function updatePadTag(p) {
     p.tag,
     title,
     p.constructing
-      ? ""
+      ? "離れると完成"
       : locked
         ? "🔒 Lv." + requiredBaseLevel(p.type)
-        : costText(c),
+        : (p.progress > 0
+            ? "建築 " +
+              Math.min(100, Math.round((p.progress / 0.8) * 100)) +
+              "% · "
+            : "") + costText(c),
     ready ? "#86f0b1" : locked ? "#8ea6bd" : "#ffd36b",
   );
+  p.tag.userData.pad = true;
+  p.tag.userData.built = false;
+  p.tag.userData.locked = locked;
   setTagState(p.tag, { ready, locked });
 }
 function updateWorldLabels() {
   ensureBaseGroundTag();
   for (const p of buildPads) updatePadTag(p);
   for (const st of defenseState.values()) {
+    st.tag.userData.built = true;
+    st.tag.userData.locked = false;
     const max = st.level >= MAX_DEF_LV,
       c = getUpgradeCost(st),
       ready = phase === "day" && !max && canAfford(c);
@@ -2714,53 +2737,88 @@ function updateWorldLabels() {
     });
   }
 }
+function setTagFootprint(tag, type, x, z) {
+  const f = defenseFootprint(type, x, z),
+    w = f.width / 2,
+    d = f.depth / 2,
+    inset = 0.055;
+  const shape = new THREE.Shape();
+  shape.moveTo(-w, -d);
+  shape.lineTo(w, -d);
+  shape.lineTo(w, d);
+  shape.lineTo(-w, d);
+  shape.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(-w + inset, -d + inset);
+  hole.lineTo(-w + inset, d - inset);
+  hole.lineTo(w - inset, d - inset);
+  hole.lineTo(w - inset, -d + inset);
+  hole.closePath();
+  shape.holes.push(hole);
+  tag.userData.ring.geometry.dispose();
+  tag.userData.ring.geometry = new THREE.ShapeGeometry(shape);
+  tag.userData.type = type;
+}
+function groundTagDistance(tag) {
+  if (tag.userData.type)
+    return distanceToDefense(tag.userData.type, tag.position.x, tag.position.z);
+  return Math.max(
+    0,
+    Math.hypot(tag.position.x - pPos.x, tag.position.z - pPos.z) -
+      (tag.userData.radius || 1.8),
+  );
+}
+function focusedGroundTag() {
+  const pad = nearestBuildPad();
+  if (pad) return pad.tag;
+  let chosen = null,
+    nearest = 0.7;
+  for (const tag of groundTagMeshes) {
+    if (tag.userData.locked) continue;
+    const d = groundTagDistance(tag);
+    if (d < nearest) {
+      chosen = tag;
+      nearest = d;
+    }
+  }
+  return chosen;
+}
 const labelVector = new THREE.Vector3();
 function projectGroundTags(t) {
-  // Rings remain visible at distance; detailed labels only appear close to the player.
   const rect = renderer.domElement.getBoundingClientRect(),
-    hudBottom = $("hud").getBoundingClientRect().bottom + 18,
-    occupied = [];
-  const tags = [...groundTagMeshes].sort(
-    (a, b) =>
-      a.position.distanceToSquared(pPos) - b.position.distanceToSquared(pPos),
-  );
-  for (const g of tags) {
-    const { el, ring, ready } = g.userData;
-    ring.scale.setScalar(ready ? 1 + Math.sin(t * 5) * 0.05 : 1);
+    hudBottom = $("hud").getBoundingClientRect().bottom + 18;
+  const focused = running ? focusedGroundTag() : null;
+  for (const g of groundTagMeshes) {
+    const { el, ring, ready, pad, built, locked } = g.userData,
+      selected = g === focused;
+    // The outline is also the footprint: never rotate/scale it independently of the building.
+    ring.visible = running && ((pad && !built && !locked) || selected);
+    ring.material.color.set(
+      selected
+        ? ready
+          ? "#86f0b1"
+          : g.userData.accent || "#ffd36b"
+        : "#50677a",
+    );
+    el.style.visibility = "hidden";
+    if (!selected) continue;
     labelVector.copy(g.position).project(camera);
     const x = rect.left + (labelVector.x * 0.5 + 0.5) * rect.width,
-      y = rect.top + (-labelVector.y * 0.5 + 0.5) * rect.height + 14;
-    const width = el.offsetWidth || 105,
-      height = el.offsetHeight || 36,
-      box = {
-        left: x - width / 2,
-        right: x + width / 2,
-        top: y - height / 2,
-        bottom: y + height / 2,
-      };
-    const close =
-      Math.hypot(g.position.x - pPos.x, g.position.z - pPos.z) < 7.5;
-    const on =
-      running &&
-      close &&
-      labelVector.z > -1 &&
-      labelVector.z < 1 &&
-      box.top > hudBottom &&
-      box.left >= 6 &&
-      box.right <= rect.right - 6 &&
-      box.bottom < rect.bottom - 8 &&
-      !occupied.some(
-        (b) =>
-          box.left < b.right + 4 &&
-          box.right > b.left - 4 &&
-          box.top < b.bottom + 4 &&
-          box.bottom > b.top - 4,
-      );
-    el.style.visibility = on ? "visible" : "hidden";
-    if (!on) continue;
+      y = rect.top + (-labelVector.y * 0.5 + 0.5) * rect.height;
+    const w = el.offsetWidth || 105,
+      h = el.offsetHeight || 36;
+    if (
+      labelVector.z <= -1 ||
+      labelVector.z >= 1 ||
+      y - h / 2 <= hudBottom ||
+      x - w / 2 < 6 ||
+      x + w / 2 > rect.right - 6 ||
+      y + h / 2 >= rect.bottom - 8
+    )
+      continue;
     el.style.left = x + "px";
     el.style.top = y + "px";
-    occupied.push(box);
+    el.style.visibility = "visible";
   }
 }
 
@@ -2768,6 +2826,7 @@ function projectGroundTags(t) {
 // ---- construction ----
 // Construction owns the full lifecycle: available -> assembling -> waiting -> built.
 const constructionSites = [];
+let defenseActionConsumed = false;
 function buildColor(type) {
   return type === "flame"
     ? 0xff8a55
@@ -2777,21 +2836,57 @@ function buildColor(type) {
         ? 0xd2aa72
         : 0xd59a5f;
 }
-function defenseOverlapsPlayer(type, x, z, px = pPos.x, pz = pPos.z) {
-  if (type === "wall") {
-    const tangent = Math.abs(x) >= Math.abs(z) ? "z" : "x";
-    return (
-      (tangent === "x" ? Math.abs(px - x) : Math.abs(pz - z)) <
-        1.52 + PLAYER_RADIUS &&
-      (tangent === "x" ? Math.abs(pz - z) : Math.abs(px - x)) <
-        0.48 + PLAYER_RADIUS
-    );
-  }
-  return (
-    Math.hypot(px - x, pz - z) <
-    (type === "warehouse" ? 1.05 : 0.72) + PLAYER_RADIUS
+function defenseFootprint(type, x, z) {
+  if (type === "wall")
+    return Math.abs(x) >= Math.abs(z)
+      ? { width: 1, depth: 4 }
+      : { width: 4, depth: 1 };
+  return { width: 2, depth: 2 };
+}
+function distanceToDefense(type, x, z, px = pPos.x, pz = pPos.z) {
+  const f = defenseFootprint(type, x, z);
+  return Math.hypot(
+    Math.max(0, Math.abs(px - x) - f.width / 2),
+    Math.max(0, Math.abs(pz - z) - f.depth / 2),
   );
 }
+function defenseOverlapsPlayer(type, x, z, px = pPos.x, pz = pPos.z) {
+  const f = defenseFootprint(type, x, z);
+  return (
+    Math.abs(px - x) < f.width / 2 + PLAYER_RADIUS &&
+    Math.abs(pz - z) < f.depth / 2 + PLAYER_RADIUS
+  );
+}
+function movementRequested() {
+  return (
+    Math.hypot(joyVec.x, joyVec.y) > 0.18 ||
+    [
+      "KeyW",
+      "KeyA",
+      "KeyS",
+      "KeyD",
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+    ].some((k) => keys[k])
+  );
+}
+function nearestBuildPad() {
+  let best = null,
+    distance = 0.7;
+  for (const p of buildPads) {
+    if (p.built || p.constructing || baseLevel < requiredBaseLevel(p.type))
+      continue;
+    const d = distanceToDefense(p.type, p.x, p.z);
+    if (d < distance) {
+      distance = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
 function playerCollidesAt(x, z) {
   for (const [k, st] of defenseState) {
     const [ox, , oz] = k.split(",").map(Number);
@@ -2814,6 +2909,7 @@ function buildFromPad(p) {
     return false;
   const c = getBuildCost(p);
   if (wood < c.wood || coal < c.coal) return false;
+  defenseActionConsumed = true;
   wood -= c.wood;
   coal -= c.coal;
   p.constructing = true;
@@ -2825,27 +2921,27 @@ function buildFromPad(p) {
   const dims =
     p.type === "wall"
       ? [
-          [2.7, 0.18, 0.42],
+          [4, 0.12, 1],
           [0.22, 1.2, 0.22],
           [0.22, 1.2, 0.22],
-          [2.55, 0.18, 0.3],
+          [3.8, 0.18, 0.3],
         ]
       : p.type === "turret"
         ? [
-            [1.5, 0.18, 1.5],
+            [2, 0.12, 2],
             [0.24, 1.45, 0.24],
             [1.15, 0.18, 1.15],
             [0.7, 0.22, 0.24],
           ]
         : p.type === "flame"
           ? [
-              [1.45, 0.18, 1.45],
+              [2, 0.12, 2],
               [0.95, 0.72, 0.95],
               [0.62, 0.38, 0.62],
               [0.22, 0.7, 0.22],
             ]
           : [
-              [1.7, 0.18, 1.4],
+              [2, 0.12, 2],
               [1.5, 0.72, 1.18],
               [1.65, 0.18, 1.32],
               [0.52, 0.32, 0.12],
@@ -2854,7 +2950,7 @@ function buildFromPad(p) {
     const m = box(...d, buildColor(p.type));
     m.position.y = 0.12 + i * 0.4;
     if (p.type === "wall" && (i === 1 || i === 2)) {
-      m.position.x = i === 1 ? -1.05 : 1.05;
+      m.position.x = i === 1 ? -1.75 : 1.75;
       m.position.y = 0.72;
     }
     m.userData.y = m.position.y;
@@ -2906,6 +3002,7 @@ function completeSite(s) {
   return true;
 }
 function updateBuildPads(dt) {
+  if (movementRequested()) defenseActionConsumed = false;
   for (let i = constructionSites.length - 1; i >= 0; i--) {
     const s = constructionSites[i];
     s.t += dt;
@@ -2918,19 +3015,14 @@ function updateBuildPads(dt) {
     });
     if (q >= 1 && completeSite(s)) constructionSites.splice(i, 1);
   }
+  const selected =
+    movementRequested() || defenseActionConsumed ? null : nearestBuildPad();
   for (const p of buildPads) {
     if (p.built || p.constructing) continue;
-    p.g.rotation.y += dt * 0.35;
-    const c = getBuildCost(p),
-      near = Math.hypot(p.x - pPos.x, p.z - pPos.z) < 1.65;
-    if (
-      near &&
-      baseLevel >= requiredBaseLevel(p.type) &&
-      wood >= c.wood &&
-      coal >= c.coal
-    ) {
+    const c = getBuildCost(p);
+    if (p === selected && canAfford(c)) {
       p.progress += dt;
-      if (p.progress > 0.36) {
+      if (p.progress >= 0.8) {
         p.progress = 0;
         buildFromPad(p);
       }
@@ -2938,6 +3030,7 @@ function updateBuildPads(dt) {
   }
 }
 function resetConstruction() {
+  defenseActionConsumed = false;
   for (const s of constructionSites) disposeObject(s.g);
   constructionSites.length = 0;
 }
@@ -3037,7 +3130,7 @@ function update(dt, t) {
     if (phaseT <= 0) {
       phase = "night";
       phaseT = 999;
-      waveLeft = day === 7 ? 34 : 14 + day * 7;
+      waveLeft = nightEnemyCount(day);
       spawnT = 0;
       const nm = chooseNightModifier();
       sfx(day === 7 ? "boss" : "wave");
@@ -3290,6 +3383,11 @@ function startGame() {
   updateHUD();
   showWaveBanner("☀️ DAY 1", "中央拠点を育てよう");
   toast("移動だけで採集・建築・防衛");
+}
+
+// Introductory nights only. Later waves and all enemy statistics are unchanged.
+function nightEnemyCount(n) {
+  return n === 1 ? 16 : n === 2 ? 24 : n === 7 ? 34 : 14 + n * 7;
 }
 
 

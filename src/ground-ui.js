@@ -26,6 +26,7 @@ function setGroundTag(g, title, sub = "", accent = "#ffd36b") {
   const sig = title + "|" + sub + "|" + accent;
   if (g.userData.last === sig) return;
   g.userData.last = sig;
+  g.userData.accent = accent;
   g.userData.el.innerHTML =
     title + (sub ? '<span class="cost">' + sub + "</span>" : "");
   g.userData.el.style.borderColor =
@@ -36,6 +37,7 @@ function setGroundTag(g, title, sub = "", accent = "#ffd36b") {
 }
 function setTagState(tag, { ready = false, locked = false } = {}) {
   tag.userData.ready = ready;
+  tag.userData.locked = locked;
   tag.userData.el.className =
     "groundHud" + (ready ? " ready" : "") + (locked ? " locked" : "");
 }
@@ -67,7 +69,8 @@ function canAfford(c) {
 function ensureBaseGroundTag() {
   if (!baseGroundTag) {
     baseGroundTag = makeGroundTag("🏰 Lv.1", "");
-    baseGroundTag.position.set(0, 0.56, 2.25);
+    baseGroundTag.position.set(0, 0.56, 0);
+    baseGroundTag.userData.radius = 2.8;
   }
   const c = baseUpgradeCost(),
     ready = phase === "day" && baseLevel < 5 && canAfford(c);
@@ -95,18 +98,27 @@ function updatePadTag(p) {
     p.tag,
     title,
     p.constructing
-      ? ""
+      ? "離れると完成"
       : locked
         ? "🔒 Lv." + requiredBaseLevel(p.type)
-        : costText(c),
+        : (p.progress > 0
+            ? "建築 " +
+              Math.min(100, Math.round((p.progress / 0.8) * 100)) +
+              "% · "
+            : "") + costText(c),
     ready ? "#86f0b1" : locked ? "#8ea6bd" : "#ffd36b",
   );
+  p.tag.userData.pad = true;
+  p.tag.userData.built = false;
+  p.tag.userData.locked = locked;
   setTagState(p.tag, { ready, locked });
 }
 function updateWorldLabels() {
   ensureBaseGroundTag();
   for (const p of buildPads) updatePadTag(p);
   for (const st of defenseState.values()) {
+    st.tag.userData.built = true;
+    st.tag.userData.locked = false;
     const max = st.level >= MAX_DEF_LV,
       c = getUpgradeCost(st),
       ready = phase === "day" && !max && canAfford(c);
@@ -130,52 +142,87 @@ function updateWorldLabels() {
     });
   }
 }
+function setTagFootprint(tag, type, x, z) {
+  const f = defenseFootprint(type, x, z),
+    w = f.width / 2,
+    d = f.depth / 2,
+    inset = 0.055;
+  const shape = new THREE.Shape();
+  shape.moveTo(-w, -d);
+  shape.lineTo(w, -d);
+  shape.lineTo(w, d);
+  shape.lineTo(-w, d);
+  shape.closePath();
+  const hole = new THREE.Path();
+  hole.moveTo(-w + inset, -d + inset);
+  hole.lineTo(-w + inset, d - inset);
+  hole.lineTo(w - inset, d - inset);
+  hole.lineTo(w - inset, -d + inset);
+  hole.closePath();
+  shape.holes.push(hole);
+  tag.userData.ring.geometry.dispose();
+  tag.userData.ring.geometry = new THREE.ShapeGeometry(shape);
+  tag.userData.type = type;
+}
+function groundTagDistance(tag) {
+  if (tag.userData.type)
+    return distanceToDefense(tag.userData.type, tag.position.x, tag.position.z);
+  return Math.max(
+    0,
+    Math.hypot(tag.position.x - pPos.x, tag.position.z - pPos.z) -
+      (tag.userData.radius || 1.8),
+  );
+}
+function focusedGroundTag() {
+  const pad = nearestBuildPad();
+  if (pad) return pad.tag;
+  let chosen = null,
+    nearest = 0.7;
+  for (const tag of groundTagMeshes) {
+    if (tag.userData.locked) continue;
+    const d = groundTagDistance(tag);
+    if (d < nearest) {
+      chosen = tag;
+      nearest = d;
+    }
+  }
+  return chosen;
+}
 const labelVector = new THREE.Vector3();
 function projectGroundTags(t) {
-  // Rings remain visible at distance; detailed labels only appear close to the player.
   const rect = renderer.domElement.getBoundingClientRect(),
-    hudBottom = $("hud").getBoundingClientRect().bottom + 18,
-    occupied = [];
-  const tags = [...groundTagMeshes].sort(
-    (a, b) =>
-      a.position.distanceToSquared(pPos) - b.position.distanceToSquared(pPos),
-  );
-  for (const g of tags) {
-    const { el, ring, ready } = g.userData;
-    ring.scale.setScalar(ready ? 1 + Math.sin(t * 5) * 0.05 : 1);
+    hudBottom = $("hud").getBoundingClientRect().bottom + 18;
+  const focused = running ? focusedGroundTag() : null;
+  for (const g of groundTagMeshes) {
+    const { el, ring, ready, pad, built, locked } = g.userData,
+      selected = g === focused;
+    // The outline is also the footprint: never rotate/scale it independently of the building.
+    ring.visible = running && ((pad && !built && !locked) || selected);
+    ring.material.color.set(
+      selected
+        ? ready
+          ? "#86f0b1"
+          : g.userData.accent || "#ffd36b"
+        : "#50677a",
+    );
+    el.style.visibility = "hidden";
+    if (!selected) continue;
     labelVector.copy(g.position).project(camera);
     const x = rect.left + (labelVector.x * 0.5 + 0.5) * rect.width,
-      y = rect.top + (-labelVector.y * 0.5 + 0.5) * rect.height + 14;
-    const width = el.offsetWidth || 105,
-      height = el.offsetHeight || 36,
-      box = {
-        left: x - width / 2,
-        right: x + width / 2,
-        top: y - height / 2,
-        bottom: y + height / 2,
-      };
-    const close =
-      Math.hypot(g.position.x - pPos.x, g.position.z - pPos.z) < 7.5;
-    const on =
-      running &&
-      close &&
-      labelVector.z > -1 &&
-      labelVector.z < 1 &&
-      box.top > hudBottom &&
-      box.left >= 6 &&
-      box.right <= rect.right - 6 &&
-      box.bottom < rect.bottom - 8 &&
-      !occupied.some(
-        (b) =>
-          box.left < b.right + 4 &&
-          box.right > b.left - 4 &&
-          box.top < b.bottom + 4 &&
-          box.bottom > b.top - 4,
-      );
-    el.style.visibility = on ? "visible" : "hidden";
-    if (!on) continue;
+      y = rect.top + (-labelVector.y * 0.5 + 0.5) * rect.height;
+    const w = el.offsetWidth || 105,
+      h = el.offsetHeight || 36;
+    if (
+      labelVector.z <= -1 ||
+      labelVector.z >= 1 ||
+      y - h / 2 <= hudBottom ||
+      x - w / 2 < 6 ||
+      x + w / 2 > rect.right - 6 ||
+      y + h / 2 >= rect.bottom - 8
+    )
+      continue;
     el.style.left = x + "px";
     el.style.top = y + "px";
-    occupied.push(box);
+    el.style.visibility = "visible";
   }
 }

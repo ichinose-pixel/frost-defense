@@ -76,7 +76,8 @@ function buildTerrain() {
   while (placed < 42 && guard++ < 2200) {
     const x = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0,
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 6) continue;
+    if (Math.max(Math.abs(x), Math.abs(z)) < 6 || isReservedBuildArea(x, z))
+      continue;
     if (Math.abs(x) <= 4 && z >= 2 && z <= 11) continue;
     let ok = true;
     for (let y = 1; y <= 5; y++)
@@ -91,7 +92,11 @@ function buildTerrain() {
         if (!blockAt(x + dx, 4, z + dz))
           blocks.set(key(x + dx, 4, z + dz), { t: "leaf", hp: 0 });
     blocks.set(key(x, 5, z), { t: "leaf", hp: 0 });
-    if (Math.random() < 0.35 && !blockAt(x + 2, 1, z + 1)) {
+    if (
+      Math.random() < 0.35 &&
+      !blockAt(x + 2, 1, z + 1) &&
+      !isReservedBuildArea(x + 2, z + 1)
+    ) {
       for (let y = 1; y <= 2; y++)
         blocks.set(key(x + 2, y, z + 1), { t: "wood", hp: 0 });
       if (!blockAt(x + 2, 3, z + 1))
@@ -104,7 +109,12 @@ function buildTerrain() {
   while (placed < 22 && guard++ < 1400) {
     const x = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0,
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 6 || blockAt(x, 1, z)) continue;
+    if (
+      Math.max(Math.abs(x), Math.abs(z)) < 6 ||
+      blockAt(x, 1, z) ||
+      isReservedBuildArea(x, z)
+    )
+      continue;
     blocks.set(key(x, 1, z), { t: "coal", hp: 0 });
     if (Math.random() < 0.75 && !blockAt(x, 2, z))
       blocks.set(key(x, 2, z), { t: "coal", hp: 0 });

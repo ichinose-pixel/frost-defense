@@ -138,7 +138,7 @@ function harness(initialize = true) {
   return { run, elements, listeners };
 }
 
-test("v11 baseline balance, night transitions and Day7 victory", () => {
+test("v13 introductory wave count, baseline stats and Day7 victory", () => {
   const { run } = harness();
   assert.equal(run("wood"), 90);
   assert.equal(run("coal"), 36);
@@ -148,7 +148,7 @@ test("v11 baseline balance, night transitions and Day7 victory", () => {
   assert.equal(run("getDefenseMaxHp('wall',3)"), 506);
   run("phaseT=0;update(.01,0)");
   assert.equal(run("phase"), "night");
-  assert.equal(run("waveLeft"), 21);
+  assert.equal(run("waveLeft"), 16);
   run("day=7;waveLeft=1;spawnEnemyPack()");
   assert.equal(run("enemies.at(-1).kind"), "boss");
   assert.equal(run("enemies.at(-1).max"), 865);
@@ -202,10 +202,10 @@ test("retry clears construction, input, pickups, base models and does not accumu
   assert.equal(run("joyVec.x"), 0);
   assert.equal(run("Object.keys(keys).length"), 0);
   assert.equal(run("fireGroup.userData.ring2"), undefined);
-  assert.equal(run("groundTagMeshes.length"), 30);
+  assert.equal(run("groundTagMeshes.length"), 24);
   run("startGame();startGame()");
-  assert.equal(run("groundTagMeshes.length"), 30);
-  assert.equal(run("$('groundLabels').children.length"), 30);
+  assert.equal(run("groundTagMeshes.length"), 24);
+  assert.equal(run("$('groundLabels').children.length"), 24);
 });
 test("warehouse bonus is removed on destruction and not multiplied by rebuilding", () => {
   const { run } = harness();
@@ -309,4 +309,107 @@ test("pointer ownership, cancel and blur stop movement", () => {
   listeners.get("blur")();
   assert.equal(run("joyVec.y"), 0);
   assert.equal(run("Object.keys(keys).length"), 0);
+});
+
+test("walking across plots never builds; stopping selects one and waits 0.8 seconds", () => {
+  const { run } = harness();
+  run(
+    "const pad=buildPads.find(p=>p.x===0&&p.z===6);keys.KeyD=true;for(let i=0;i<60;i++){pPos.set(-3+i*.1,.5,6);updateBuildPads(.05)}",
+  );
+  assert.equal(run("constructionSites.length"), 0);
+  assert.equal(run("wood"), 90);
+  run(
+    "delete keys.KeyD;pPos.set(0,.5,5);for(let i=0;i<14;i++)updateBuildPads(.05)",
+  );
+  assert.equal(run("pad.constructing"), undefined);
+  assert.equal(run("wood"), 90);
+  run("updateBuildPads(.11)");
+  assert.equal(run("pad.constructing"), true);
+  assert.equal(run("wood"), 75);
+  assert.equal(run("constructionSites.length"), 1);
+  run("for(let i=0;i<60;i++){updateBuildPads(.05);updateDefenseUpgrades(.05)}");
+  assert.equal(run("pad.built"), true);
+  assert.equal(run("defenseState.get(key(0,1,6)).level"), 1);
+  assert.equal(run("wood"), 75);
+  run(
+    "keys.KeyW=true;updateBuildPads(.01);delete keys.KeyW;for(let i=0;i<17;i++)updateDefenseUpgrades(.05)",
+  );
+  assert.equal(run("defenseState.get(key(0,1,6)).level"), 2);
+});
+test("moving away resets partial build dwell rather than accumulating passes", () => {
+  const { run } = harness();
+  run(
+    "pPos.set(0,.5,5);updateBuildPads(.5);pPos.z=3;updateBuildPads(.1);pPos.z=5;updateBuildPads(.5)",
+  );
+  assert.equal(run("constructionSites.length"), 0);
+  assert.equal(run("wood"), 90);
+});
+test("footprints, outlines, enemy collision and player collision agree at edges", () => {
+  const { run } = harness();
+  assert.equal(
+    run("JSON.stringify(defenseFootprint('wall',0,6))"),
+    '{"width":4,"depth":1}',
+  );
+  assert.equal(
+    run("JSON.stringify(defenseFootprint('turret',8,8))"),
+    '{"width":2,"depth":2}',
+  );
+  run(
+    "const p=buildPads.find(p=>p.type==='turret');buildFromPad(p);updateBuildPads(1)",
+  );
+  assert.equal(run("!!solidAt(p.x+.9,p.z+.9)"), true);
+  assert.equal(run("!!solidAt(p.x+1.1,p.z)"), false);
+  assert.equal(run("playerCollidesAt(p.x+1.2,p.z)"), true);
+  assert.equal(
+    run("buildPads.every(p=>p.tag.position.x===p.x&&p.tag.position.z===p.z)"),
+    true,
+  );
+  run("p.tag.userData.ring.geometry.computeBoundingBox()");
+  assert.equal(
+    run(
+      "p.tag.userData.ring.geometry.boundingBox.max.x-p.tag.userData.ring.geometry.boundingBox.min.x",
+    ),
+    2,
+  );
+});
+test("enlarged plots do not overlap and leave walkable north/south and side exits", () => {
+  const { run } = harness();
+  assert.equal(
+    run(
+      `buildPads.every((p,i)=>buildPads.slice(i+1).every(q=>{const a=defenseFootprint(p.type,p.x,p.z),b=defenseFootprint(q.type,q.x,q.z);return Math.abs(p.x-q.x)>=(a.width+b.width)/2||Math.abs(p.z-q.z)>=(a.depth+b.depth)/2}))`,
+    ),
+    true,
+  );
+  run(
+    "baseLevel=4;wood=9999;coal=9999;pPos.set(0,.5,0);for(const p of buildPads)buildFromPad(p);updateBuildPads(1)",
+  );
+  assert.equal(run("playerCollidesAt(2.5,6)"), false);
+  assert.equal(run("playerCollidesAt(-2.5,-6)"), false);
+  assert.equal(run("playerCollidesAt(8,0)"), false);
+});
+test("one focused tag only, exactly at the object; nothing selected at spawn", () => {
+  const { run } = harness();
+  run("updateWorldLabels()");
+  assert.equal(run("focusedGroundTag()"), null);
+  run(
+    "pPos.set(0,.5,5);camera.position.set(14,18,20);camera.lookAt(0,0,6);camera.updateMatrixWorld();updateWorldLabels();projectGroundTags(1)",
+  );
+  assert.equal(
+    run(
+      "groundTagMeshes.filter(g=>g.userData.el.style.visibility==='visible').length",
+    ),
+    1,
+  );
+  assert.equal(run("focusedGroundTag().position.z"), 6);
+  run(
+    "camera.position.set(0,20,20);camera.lookAt(0,0,0);camera.updateMatrixWorld()",
+  );
+  assert.equal(run("baseGroundTag.position.z"), 0);
+});
+test("only first two nights have fewer enemies", () => {
+  const { run } = harness();
+  assert.equal(
+    run("[1,2,3,4,5,6,7].map(nightEnemyCount).join()"),
+    "16,24,35,42,49,56,34",
+  );
 });

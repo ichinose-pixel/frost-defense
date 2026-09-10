@@ -1,6 +1,6 @@
-# Frost Defense — v12
+# Frost Defense — v13
 
-スマホ向けライトサバイバル防衛ゲーム。移動先を選ぶだけで採集・攻撃・建築・補給を自動実行。Day7ボス撃破がステージクリアです。
+スマホ向けライトサバイバル防衛ゲーム。移動先を選ぶだけで採集・攻撃・補給を自動実行。防衛設備の建築・強化は、そばで約0.8秒立ち止まると1件ずつ実行。Day7ボス撃破がステージクリアです。
 
 公開URL: https://ichinose-pixel.github.io/frost-defense/
 
@@ -40,6 +40,7 @@ python -m http.server 8080
 
 ## 検証・運用
 
+- `docs/v13-changes.md`: 地面UI、建築選択、設備サイズ、序盤調整。
 - `docs/v12-audit.md`: 現行コード監査、変更点、残る課題。
 - `docs/iphone-test.md`: 実機確認手順。
 - `npm run check` が通った変更をGitHubに反映し、既存PagesのURLで確認します。

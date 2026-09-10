@@ -363,7 +363,13 @@ function updateProjectiles(dt, t) {
         Math.round(a.m.position.y),
         Math.round(a.m.position.z),
       );
-      if (c) dead = true;
+      if (
+        c ||
+        (a.m.position.y >= 0.5 &&
+          a.m.position.y < 1.5 &&
+          solidAt(a.m.position.x, a.m.position.z))
+      )
+        dead = true;
     }
     if (dead) {
       disposeObject(a.m);

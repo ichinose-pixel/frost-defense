@@ -24,68 +24,41 @@ function requiredBaseLevel(type) {
   return type === "wall" || type === "turret" ? 1 : type === "flame" ? 2 : 3;
 }
 
-function addBuildPads() {
+function buildPadDefinitions() {
   const defs = [];
-  for (const x of [-6, -3, 0, 3, 6]) {
-    defs.push([x, -6, "wall", 15]);
-    defs.push([x, 6, "wall", 15]);
-  }
-  for (const z of [-3, 0, 3]) {
-    defs.push([-6, z, "wall", 15]);
-    defs.push([6, z, "wall", 15]);
-  }
+  for (const x of [-5, 0, 5])
+    for (const z of [-6, 6]) defs.push([x, z, "wall", 15]);
+  for (const z of [-3, 3])
+    for (const x of [-8, 8]) defs.push([x, z, "wall", 15]);
   defs.push(
     [-8, -8, "turret", 40],
     [8, -8, "turret", 40],
     [-8, 8, "turret", 40],
     [8, 8, "turret", 40],
   );
-  defs.push([0, -10, "flame", 55], [0, 10, "flame", 55]);
-  defs.push([-10, 0, "warehouse", 45], [10, 0, "warehouse", 45]);
-  defs.forEach(([x, z, type, cost], i) => {
-    const g = new THREE.Group(),
-      c =
-        type === "turret"
-          ? 0x67b7ff
-          : type === "flame"
-            ? 0xff8b55
-            : type === "warehouse"
-              ? 0x9de3a0
-              : 0xffd36b,
-      ring = new THREE.Mesh(
-        new THREE.CylinderGeometry(
-          type === "wall" ? 1.28 : 0.78,
-          type === "wall" ? 1.28 : 0.78,
-          0.07,
-          32,
-        ),
-        new THREE.MeshBasicMaterial({
-          color: c,
-          transparent: true,
-          opacity: 0.27,
-        }),
-      );
-    ring.position.y = 0.57;
-    g.add(ring);
-    const core = box(
-      type === "wall" ? 1.15 : 0.46,
-      0.08,
-      type === "wall" ? 0.22 : 0.46,
-      c,
-    );
-    core.position.y = 0.66;
-    g.add(core);
+  defs.push(
+    [0, -10, "flame", 55],
+    [0, 10, "flame", 55],
+    [-10, 0, "warehouse", 45],
+    [10, 0, "warehouse", 45],
+  );
+  return defs;
+}
+function isReservedBuildArea(x, z) {
+  return buildPadDefinitions().some(
+    ([bx, bz, type]) => distanceToDefense(type, bx, bz, x, z) < 1,
+  );
+}
+function addBuildPads() {
+  buildPadDefinitions().forEach(([x, z, type, cost], index) => {
+    // One footprint outline, at the actual building location. No second disc or offset marker.
+    const g = new THREE.Group();
     g.position.set(x, 0, z);
     scene.add(g);
-    const gc = getBuildCost({ type, cost }),
-      tag = makeGroundTag(
-        typeIcon(type) + " " + typeName(type),
-        "🌲" + gc.wood + (gc.coal ? "  🪨" + gc.coal : ""),
-        c,
-        2.7,
-        0.8,
-      );
-    tag.position.set(x, 0.56, z + 1.45);
+    const tag = makeGroundTag(typeIcon(type), "");
+    tag.position.set(x, 0.56, z);
+    setTagFootprint(tag, type, x, z);
+    tag.userData.pad = true;
     buildPads.push({
       g,
       x,
@@ -94,7 +67,7 @@ function addBuildPads() {
       cost,
       built: false,
       progress: 0,
-      index: i,
+      index,
       tag,
     });
   });
@@ -142,8 +115,8 @@ function addWallDecor(x, y, z, level = 1) {
   for (let i = -4; i <= 4; i++) {
     const post = box(0.26, 1.75, 0.26, level >= 3 ? 0xd8b06d : 0x8b5c32);
     post.position.y = 1.05;
-    if (tangent === "x") post.position.x = i * 0.32;
-    else post.position.z = i * 0.32;
+    if (tangent === "x") post.position.x = i * 0.45;
+    else post.position.z = i * 0.45;
     g.add(post);
     const tip = box(0.19, 0.32, 0.19, 0xe3c084);
     tip.position.copy(post.position);
@@ -152,9 +125,9 @@ function addWallDecor(x, y, z, level = 1) {
     g.add(tip);
   }
   const rail1 = box(
-    tangent === "x" ? 2.9 : 0.22,
+    tangent === "x" ? 3.9 : 0.22,
     0.18,
-    tangent === "x" ? 0.22 : 2.9,
+    tangent === "x" ? 0.22 : 3.9,
     0x694421,
   );
   rail1.position.y = 1.05;
@@ -164,9 +137,9 @@ function addWallDecor(x, y, z, level = 1) {
   g.add(rail2);
   if (level >= 2) {
     const cap = box(
-      tangent === "x" ? 3.05 : 0.3,
+      tangent === "x" ? 4 : 0.3,
       0.14,
-      tangent === "x" ? 0.3 : 3.05,
+      tangent === "x" ? 0.3 : 4,
       0xd5a35e,
     );
     cap.position.y = 1.92;
@@ -181,6 +154,10 @@ function addWallDecor(x, y, z, level = 1) {
     );
     g.add(banner);
   }
+  const f = defenseFootprint("wall", x, z),
+    foundation = box(f.width, 0.1, f.depth, 0x72543a);
+  foundation.position.y = 0.05;
+  g.add(foundation);
   g.position.set(x, y - 0.5, z);
   scene.add(g);
   wallDecorObjs.set(k, g);
@@ -271,6 +248,21 @@ function addTurretVisual(x, y, z, level = 1) {
       [0.12, 0.38, 0.12, 0x8fe5ff, -0.42, 2.08, 0],
       [0.12, 0.38, 0.12, 0x8fe5ff, 0.42, 2.08, 0],
     ]);
+  for (const m of g.children) {
+    m.position.x *= 1.6;
+    m.position.z *= 1.6;
+    m.scale.x *= 1.6;
+    m.scale.z *= 1.6;
+  }
+  const platform = box(2, 0.12, 2, 0x53677d);
+  platform.position.y = -0.44;
+  g.add(platform);
+  for (const px of [-0.8, 0.8])
+    for (const pz of [-0.8, 0.8]) {
+      const post = box(0.18, 1.9, 0.18, 0x765634);
+      post.position.set(px, 0.55, pz);
+      g.add(post);
+    }
   g.position.set(x, y, z);
   scene.add(g);
   g.userData.level = level;
@@ -288,11 +280,11 @@ function refreshDefenseVisual(x, y, z) {
 
 function findUpgradeableDefenseNear() {
   let best = null,
-    bd = 1.45;
+    bd = 0.7;
   defenseState.forEach((st, k) => {
     if (st.level >= MAX_DEF_LV) return;
     const [x, y, z] = k.split(",").map(Number),
-      d = Math.hypot(x - pPos.x, z - pPos.z);
+      d = distanceToDefense(st.type, x, z);
     if (d < bd) {
       bd = d;
       best = { x, y, z, state: st };
@@ -343,8 +335,15 @@ function upgradeDefense(hit) {
 }
 
 function updateDefenseUpgrades(dt) {
-  if (phase !== "day") return;
-  const hit = findUpgradeableDefenseNear();
+  const hit =
+    phase === "day" &&
+    !movementRequested() &&
+    !defenseActionConsumed &&
+    !nearestBuildPad()
+      ? findUpgradeableDefenseNear()
+      : null;
+  for (const st of defenseState.values())
+    if (st !== hit?.state) st._progress = 0;
   if (!hit) return;
   const st = hit.state,
     cost = getUpgradeCost(st);
@@ -359,9 +358,9 @@ function updateDefenseUpgrades(dt) {
         2,
         new THREE.Vector3(hit.x, 1.2, hit.z),
       );
-    if (st._progress > 0.48) {
+    if (st._progress >= 0.8) {
       st._progress = 0;
-      upgradeDefense(hit);
+      if (upgradeDefense(hit)) defenseActionConsumed = true;
     }
   } else {
     st._progress = 0;

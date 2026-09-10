@@ -58,16 +58,10 @@ function buildPlayer() {
 
 function solidAt(x, z) {
   for (const [k, st] of defenseState) {
-    if (st.type !== "wall") continue;
-    const [wx, wy, wz] = k.split(",").map(Number),
-      tangent = Math.abs(wx) >= Math.abs(wz) ? "z" : "x",
-      along = tangent === "x" ? Math.abs(x - wx) : Math.abs(z - wz),
-      across = tangent === "x" ? Math.abs(z - wz) : Math.abs(x - wx);
-    if (along <= 1.52 && across <= 0.48) return blockAt(wx, wy, wz);
-  }
-  for (let y = 1; y <= 2; y++) {
-    const b = blockAt(Math.round(x), y, Math.round(z));
-    if (b && ["wall", "turret", "flame", "warehouse"].includes(b.t)) return b;
+    const [bx, by, bz] = k.split(",").map(Number),
+      f = defenseFootprint(st.type, bx, bz);
+    if (Math.abs(x - bx) <= f.width / 2 && Math.abs(z - bz) <= f.depth / 2)
+      return blockAt(bx, by, bz);
   }
   return null;
 }

@@ -116,7 +116,8 @@ function initOutposts() {
         3.25,
         0.88,
       );
-    tag.position.set(x, 0.56, z + 2.15);
+    tag.position.set(x, 0.56, z);
+    tag.userData.radius = 2.4;
     outposts.push({
       type,
       x,

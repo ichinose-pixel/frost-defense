@@ -148,7 +148,8 @@ function spawnResourceNode(type) {
   for (let guard = 0; guard < 120; guard++) {
     const x = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0,
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
-    if (Math.max(Math.abs(x), Math.abs(z)) < 7) continue;
+    if (Math.max(Math.abs(x), Math.abs(z)) < 7 || isReservedBuildArea(x, z))
+      continue;
     if (blockAt(x, 1, z) || blockAt(x, 2, z) || blockAt(x, 3, z)) continue;
     if (type === "tree") {
       for (let y = 1; y <= 3; y++)

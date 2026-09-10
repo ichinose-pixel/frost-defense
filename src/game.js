@@ -12,7 +12,7 @@ function update(dt, t) {
     if (phaseT <= 0) {
       phase = "night";
       phaseT = 999;
-      waveLeft = day === 7 ? 34 : 14 + day * 7;
+      waveLeft = nightEnemyCount(day);
       spawnT = 0;
       const nm = chooseNightModifier();
       sfx(day === 7 ? "boss" : "wave");
@@ -265,4 +265,9 @@ function startGame() {
   updateHUD();
   showWaveBanner("☀️ DAY 1", "中央拠点を育てよう");
   toast("移動だけで採集・建築・防衛");
+}
+
+// Introductory nights only. Later waves and all enemy statistics are unchanged.
+function nightEnemyCount(n) {
+  return n === 1 ? 16 : n === 2 ? 24 : n === 7 ? 34 : 14 + n * 7;
 }

@@ -1,5 +1,6 @@
 // Construction owns the full lifecycle: available -> assembling -> waiting -> built.
 const constructionSites = [];
+let defenseActionConsumed = false;
 function buildColor(type) {
   return type === "flame"
     ? 0xff8a55
@@ -9,21 +10,57 @@ function buildColor(type) {
         ? 0xd2aa72
         : 0xd59a5f;
 }
-function defenseOverlapsPlayer(type, x, z, px = pPos.x, pz = pPos.z) {
-  if (type === "wall") {
-    const tangent = Math.abs(x) >= Math.abs(z) ? "z" : "x";
-    return (
-      (tangent === "x" ? Math.abs(px - x) : Math.abs(pz - z)) <
-        1.52 + PLAYER_RADIUS &&
-      (tangent === "x" ? Math.abs(pz - z) : Math.abs(px - x)) <
-        0.48 + PLAYER_RADIUS
-    );
-  }
-  return (
-    Math.hypot(px - x, pz - z) <
-    (type === "warehouse" ? 1.05 : 0.72) + PLAYER_RADIUS
+function defenseFootprint(type, x, z) {
+  if (type === "wall")
+    return Math.abs(x) >= Math.abs(z)
+      ? { width: 1, depth: 4 }
+      : { width: 4, depth: 1 };
+  return { width: 2, depth: 2 };
+}
+function distanceToDefense(type, x, z, px = pPos.x, pz = pPos.z) {
+  const f = defenseFootprint(type, x, z);
+  return Math.hypot(
+    Math.max(0, Math.abs(px - x) - f.width / 2),
+    Math.max(0, Math.abs(pz - z) - f.depth / 2),
   );
 }
+function defenseOverlapsPlayer(type, x, z, px = pPos.x, pz = pPos.z) {
+  const f = defenseFootprint(type, x, z);
+  return (
+    Math.abs(px - x) < f.width / 2 + PLAYER_RADIUS &&
+    Math.abs(pz - z) < f.depth / 2 + PLAYER_RADIUS
+  );
+}
+function movementRequested() {
+  return (
+    Math.hypot(joyVec.x, joyVec.y) > 0.18 ||
+    [
+      "KeyW",
+      "KeyA",
+      "KeyS",
+      "KeyD",
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+    ].some((k) => keys[k])
+  );
+}
+function nearestBuildPad() {
+  let best = null,
+    distance = 0.7;
+  for (const p of buildPads) {
+    if (p.built || p.constructing || baseLevel < requiredBaseLevel(p.type))
+      continue;
+    const d = distanceToDefense(p.type, p.x, p.z);
+    if (d < distance) {
+      distance = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
 function playerCollidesAt(x, z) {
   for (const [k, st] of defenseState) {
     const [ox, , oz] = k.split(",").map(Number);
@@ -46,6 +83,7 @@ function buildFromPad(p) {
     return false;
   const c = getBuildCost(p);
   if (wood < c.wood || coal < c.coal) return false;
+  defenseActionConsumed = true;
   wood -= c.wood;
   coal -= c.coal;
   p.constructing = true;
@@ -57,27 +95,27 @@ function buildFromPad(p) {
   const dims =
     p.type === "wall"
       ? [
-          [2.7, 0.18, 0.42],
+          [4, 0.12, 1],
           [0.22, 1.2, 0.22],
           [0.22, 1.2, 0.22],
-          [2.55, 0.18, 0.3],
+          [3.8, 0.18, 0.3],
         ]
       : p.type === "turret"
         ? [
-            [1.5, 0.18, 1.5],
+            [2, 0.12, 2],
             [0.24, 1.45, 0.24],
             [1.15, 0.18, 1.15],
             [0.7, 0.22, 0.24],
           ]
         : p.type === "flame"
           ? [
-              [1.45, 0.18, 1.45],
+              [2, 0.12, 2],
               [0.95, 0.72, 0.95],
               [0.62, 0.38, 0.62],
               [0.22, 0.7, 0.22],
             ]
           : [
-              [1.7, 0.18, 1.4],
+              [2, 0.12, 2],
               [1.5, 0.72, 1.18],
               [1.65, 0.18, 1.32],
               [0.52, 0.32, 0.12],
@@ -86,7 +124,7 @@ function buildFromPad(p) {
     const m = box(...d, buildColor(p.type));
     m.position.y = 0.12 + i * 0.4;
     if (p.type === "wall" && (i === 1 || i === 2)) {
-      m.position.x = i === 1 ? -1.05 : 1.05;
+      m.position.x = i === 1 ? -1.75 : 1.75;
       m.position.y = 0.72;
     }
     m.userData.y = m.position.y;
@@ -138,6 +176,7 @@ function completeSite(s) {
   return true;
 }
 function updateBuildPads(dt) {
+  if (movementRequested()) defenseActionConsumed = false;
   for (let i = constructionSites.length - 1; i >= 0; i--) {
     const s = constructionSites[i];
     s.t += dt;
@@ -150,19 +189,14 @@ function updateBuildPads(dt) {
     });
     if (q >= 1 && completeSite(s)) constructionSites.splice(i, 1);
   }
+  const selected =
+    movementRequested() || defenseActionConsumed ? null : nearestBuildPad();
   for (const p of buildPads) {
     if (p.built || p.constructing) continue;
-    p.g.rotation.y += dt * 0.35;
-    const c = getBuildCost(p),
-      near = Math.hypot(p.x - pPos.x, p.z - pPos.z) < 1.65;
-    if (
-      near &&
-      baseLevel >= requiredBaseLevel(p.type) &&
-      wood >= c.wood &&
-      coal >= c.coal
-    ) {
+    const c = getBuildCost(p);
+    if (p === selected && canAfford(c)) {
       p.progress += dt;
-      if (p.progress > 0.36) {
+      if (p.progress >= 0.8) {
         p.progress = 0;
         buildFromPad(p);
       }
@@ -170,6 +204,7 @@ function updateBuildPads(dt) {
   }
 }
 function resetConstruction() {
+  defenseActionConsumed = false;
   for (const s of constructionSites) disposeObject(s.g);
   constructionSites.length = 0;
 }
