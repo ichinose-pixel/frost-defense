@@ -59,3 +59,9 @@ python -m http.server 8080
 `npm run mobile:sync`で両OSへ反映し、`npm run mobile:android`／`npm run mobile:ios`でIDEを開きます。
 AndroidテストAPKはGitHub Actionsの「Android test app」から取得できます（ビルド成功後）。
 環境構築・保存の仕様・実機確認事項は[アプリ開発手順](docs/mobile.md)を参照してください。
+
+## v18
+
+ゲーム画面でのテキスト選択を抑止。キャラ・弾・発射演出を見やすくし、
+ドラゴンに飛行装甲・弱点露出・HP半分以下の攻撃加速を追加しました。
+詳細は[戦闘と選択防止の変更](docs/v18-combat.md)を参照してください。

@@ -170,7 +170,7 @@ test("v13 introductory wave count, baseline stats and Day7 victory", () => {
   assert.equal(run("waveLeft"), 16);
   run("day=7;waveLeft=1;spawnEnemyPack()");
   assert.equal(run("enemies.at(-1).kind"), "boss");
-  assert.equal(run("enemies.at(-1).max"), 865);
+  assert.equal(run("enemies.at(-1).max"), 1400);
   run("enemies=[];waveLeft=0;update(.01,1)");
   assert.equal(run("stageClear"), true);
   assert.equal(run("running"), false);
@@ -644,7 +644,7 @@ test("blocked, malformed and future-version saves do not stop play or destroy ne
   assert.equal(run("overwritten"), false);
   assert.equal(run("campaign.cleared"), 1);
 });
-test("later stages relocate resources and outposts without changing build footprints, rewards or enemy HP", () => {
+test("later stages relocate resources and outposts without changing build footprints, rewards or regular enemy HP", () => {
   const { run } = harness();
   run("campaign.cleared=3");
   for (const stage of [2, 3]) {
@@ -662,7 +662,7 @@ test("later stages relocate resources and outposts without changing build footpr
     assert.equal(run("playerCollidesAt(2.5,6)"), false);
     assert.equal(run("inst.count<=inst.instanceMatrix.count"), true);
     run("day=7;spawnEnemy(20,20,'boss')");
-    assert.equal(run("enemies.at(-1).max"), 865);
+    assert.equal(run("enemies.at(-1).max"), 1400 + (stage - 1) * 200);
     run(
       "day=1;spawnResourceNode('tree');spawnResourceNode('coal');flushWorld()",
     );
@@ -693,7 +693,7 @@ test("flanking pattern changes by stage while every wave still has exactly one D
 test("dragon has a flying silhouette, brief entrance and arrows hit its airborne body", () => {
   const { run } = harness();
   run("day=7;phase='night';spawnEnemy(0,6,'boss');const dragon=enemies[0]");
-  assert.equal(run("dragon.max"), 865);
+  assert.equal(run("dragon.max"), 1400);
   assert.equal(run("dragon.model.wings.length"), 2);
   assert.equal(run("enemyAimPoint(dragon).y>3"), true);
   assert.equal(run("damageEnemy(dragon,100)"), false);
@@ -704,7 +704,7 @@ test("dragon has a flying silhouette, brief entrance and arrows hit its airborne
   run(
     "shootArrow(enemyAimPoint(dragon),new THREE.Vector3(0,0,1),25,dragon);updateProjectiles(.001,0)",
   );
-  assert.equal(run("dragon.hp"), 830);
+  assert.equal(run("dragon.hp"), 1379);
 });
 test("dragon flies past walls and warns before one breath damages base; retry clears boss UI", () => {
   const { run } = harness();
@@ -745,4 +745,46 @@ test("boss direction stays inside visible viewport and dedicated defeat effect r
   assert.equal(run("deathEffects.length"), 0);
   assert.equal(run("$('goTitle').textContent"), "🏆 STAGE 1 CLEAR");
   assert.equal(run("$('bossPanel').hidden"), true);
+});
+
+test("dragon armor, exposed window and rage change combat without raising regular enemies", () => {
+  const { run } = harness();
+  run(
+    "day=7;spawnEnemy(0,6,'boss');const d=enemies[0];d.dragonAge=3;damageEnemy(d,100)",
+  );
+  assert.equal(run("d.hp"), 1340);
+  run("d.breathClock=3.3;damageEnemy(d,100)");
+  assert.equal(run("d.hp"), 1215);
+  run("d.hp=d.max/2;d.breathClock=2.4;updateDragon(d,.01)");
+  assert.equal(run("dragonBreathInterval(d)"), 3.6);
+  assert.equal(run("d.model.warning.visible"), true);
+  run(
+    "spawnEnemy(4,4,'raider');const r=enemies.at(-1);const hp=r.hp;damageEnemy(r,100)",
+  );
+  assert.equal(run("hp-r.hp"), 100);
+});
+
+test("automatic fire has a held firing pose, visible muzzle and resets on retry", () => {
+  const { run } = harness();
+  run(
+    "phase='night';spawnEnemy(pPos.x+3,pPos.z,'raider');updatePlayer(.016,1)",
+  );
+  assert.equal(run("muzzle.visible && shootPose>0 && arrows.length===1"), true);
+  assert.equal(run("arrows[0].m.material.isMeshBasicMaterial"), true);
+  run("updatePlayer(.05,1.05)");
+  assert.equal(run("limbs.armR.rotation.x"), -1.25);
+  run("updatePlayer(.2,1.25)");
+  assert.equal(run("muzzle.visible"), false);
+  run("startGame()");
+  assert.equal(run("shootPose"), 0);
+  assert.equal(run("muzzle.visible"), false);
+});
+
+test("game viewport cancels selection and dragging without blocking button clicks", () => {
+  const { run } = harness();
+  run(
+    "bindInput();let blocked=0;for(const type of ['selectstart','dragstart','contextmenu'])$('gameViewport')[type]({preventDefault(){blocked++}})",
+  );
+  assert.equal(run("blocked"), 3);
+  assert.equal(run("typeof $('gameViewport').pointerdown"), "undefined");
 });

@@ -15,6 +15,11 @@ function resetInput() {
 }
 function bindInput() {
   const canvas = renderer.domElement;
+  const viewport = $("gameViewport");
+  for (const event of ["selectstart", "dragstart", "contextmenu"])
+    viewport.addEventListener(event, (e) => e.preventDefault());
+  // Clear an existing selection when returning to gameplay; buttons retain clicks.
+
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener(
     "pointerdown",
@@ -28,6 +33,7 @@ function bindInput() {
       )
         return;
       e.preventDefault();
+      window.getSelection?.()?.removeAllRanges();
       joyId = e.pointerId;
       canvas.setPointerCapture?.(joyId);
       const rect = canvas.getBoundingClientRect();

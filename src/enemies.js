@@ -136,7 +136,10 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
         : kind === "wolf"
           ? makeWolf()
           : makeRaider(scale);
-  if (kind !== "boss") colorizeEnemy(model.g, kind);
+  if (kind !== "boss") {
+    colorizeEnemy(model.g, kind);
+    model.g.scale.multiplyScalar(1.15);
+  }
   const hpBase =
       {
         wolf: 26,
@@ -144,7 +147,7 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
         armored: 105,
         breaker: 78,
         thrower: 54,
-        boss: 620,
+        boss: 1155 + (currentStage - 1) * 200,
       }[kind] || 48,
     hp = hpBase + day * (kind === "boss" ? 35 : 7);
   model.g.position.set(x, 0.5, z);
@@ -218,7 +221,10 @@ function spawnEnemyPack() {
 }
 
 function shootArrow(from, dir, dmg, home) {
-  const m = box(0.07, 0.07, 0.55, 0xffe08a);
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14, 0.14, 0.95),
+    new THREE.MeshBasicMaterial({ color: 0xffd45c }),
+  );
   m.position.copy(from);
   m.lookAt(from.clone().add(dir));
   scene.add(m);

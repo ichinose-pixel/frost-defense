@@ -75,9 +75,17 @@ function enemyAimPoint(e) {
 function enemyTargetable(e) {
   return e.hp > 0 && !(e.kind === "boss" && e.dragonAge < 2.2);
 }
+function dragonBreathInterval(e) {
+  return e.hp <= e.max * 0.5 ? 3.6 : 4.5;
+}
+function dragonExposed(e) {
+  return e.breathFlash > 0 || e.breathClock >= dragonBreathInterval(e) - 1.25;
+}
 function damageEnemy(e, amount) {
   if (!enemyTargetable(e)) return false;
-  e.hp -= amount;
+  // Armored in flight; descending to breathe is the player's damage window.
+  const factor = e.kind === "boss" ? (dragonExposed(e) ? 1.25 : 0.6) : 1;
+  e.hp -= amount * factor;
   return true;
 }
 function announceDragon(e) {
@@ -108,7 +116,7 @@ function updateDragon(e, dt) {
     dx = (Math.cos(a) * 6 - g.position.x) / dt;
     dz = (Math.sin(a) * 6 - g.position.z) / dt;
     if (e.dragonAge >= 2.2) e.breathClock += dt;
-    if (e.breathClock >= 4.5) {
+    if (e.breathClock >= dragonBreathInterval(e)) {
       e.breathClock = 0;
       e.breathFlash = 0.4;
       baseHP -= e.dmg;
@@ -120,7 +128,7 @@ function updateDragon(e, dt) {
   }
   g.position.x += dx * dt;
   g.position.z += dz * dt;
-  const warning = e.breathClock >= 3.25;
+  const warning = e.breathClock >= dragonBreathInterval(e) - 1.25;
   g.rotation.y =
     warning || e.breathFlash > 0
       ? Math.atan2(-g.position.x, -g.position.z)
@@ -176,9 +184,11 @@ function updateDragonUI() {
       ? "撃破！"
       : e.dragonAge < 2.2
         ? "飛来中"
-        : e.breathClock >= 3.25
-          ? "氷息の予兆 → 拠点"
-          : "旋回中・自動攻撃で迎撃";
+        : dragonExposed(e)
+          ? "氷息の予兆・弱点露出！"
+          : e.hp <= e.max * 0.5
+            ? "怒り・氷息が加速／飛行装甲"
+            : "飛行装甲・降下時が攻撃チャンス";
   if (e.hp <= 0) return;
   const rect = renderer.domElement.getBoundingClientRect(),
     top = $("hud").getBoundingClientRect().bottom - rect.top + 24;

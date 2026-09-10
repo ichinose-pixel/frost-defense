@@ -1,8 +1,28 @@
 // player system — v12, integrated from the deployed v11.
 
+let shootPose = 0,
+  rifle = null,
+  muzzle = null;
 function buildPlayer() {
   if (player) disposeObject(player);
   player = new THREE.Group();
+  player.scale.setScalar(1.18);
+  shootPose = 0;
+  rifle = new THREE.Group();
+  rifle.visible = false;
+  const stock = box(0.18, 0.18, 0.48, 0x765039);
+  const barrel = box(0.12, 0.12, 0.55, 0x9bc6d7);
+  barrel.position.z = 0.42;
+  rifle.add(stock, barrel);
+  muzzle = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.22),
+    new THREE.MeshBasicMaterial({ color: 0xffed9b }),
+  );
+  muzzle.position.z = 0.8;
+  muzzle.visible = false;
+  rifle.add(muzzle);
+  rifle.position.set(0.3, 1.3, 0.35);
+  player.add(rifle);
   const coat = 0x365b8f,
     coat2 = 0x294a78,
     skin = 0xe7b98c,
@@ -146,7 +166,11 @@ function updatePlayer(dt, t) {
   attackRing.position.set(pPos.x, 0.56, pPos.z);
   attackRing.material.opacity = phase === "night" ? 0.18 : 0.08;
   attackRing.visible = phase === "night";
-  if (ml > 0.08) player.rotation.y = Math.atan2(wx, wz);
+  shootPose = Math.max(0, shootPose - dt);
+  rifle.visible = phase === "night";
+  muzzle.visible = shootPose > 0.11;
+  rifle.position.z = 0.35 - (shootPose / 0.2) * 0.12;
+  if (ml > 0.08 && shootPose <= 0) player.rotation.y = Math.atan2(wx, wz);
   const moving = ml > 0.15,
     sw = moving ? Math.sin(t * 11) * 0.7 : 0;
   limbs.legL.rotation.x = sw;
@@ -185,17 +209,19 @@ function updatePlayer(dt, t) {
     }
     if (target) {
       shootCD = 0.42;
-      const from = pPos.clone().add(new THREE.Vector3(0, 1.35, 0)),
-        dir = enemyAimPoint(target).sub(from).normalize();
-      shootArrow(
-        from.clone().add(dir.clone().multiplyScalar(0.5)),
-        dir,
-        playerDmg,
-        target,
-      );
+      const aim = enemyAimPoint(target);
+      player.rotation.y = Math.atan2(aim.x - pPos.x, aim.z - pPos.z);
+      player.updateMatrixWorld(true);
+      const from = muzzle.getWorldPosition(new THREE.Vector3()),
+        dir = aim.sub(from).normalize();
+      shootPose = 0.2;
+      muzzle.visible = true;
+      shootArrow(from, dir, playerDmg, target);
       sfx("shoot");
-      player.rotation.y = Math.atan2(dir.x, dir.z);
-      limbs.armR.rotation.x = -1.25;
     }
+  }
+  if (shootPose > 0) {
+    limbs.armR.rotation.x = -1.25;
+    limbs.armL.rotation.x = -0.95;
   }
 }
