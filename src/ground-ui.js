@@ -214,13 +214,13 @@ function projectGroundTags(t) {
       labelVector.z <= -1 ||
       labelVector.z >= 1 ||
       y - h / 2 <= hudBottom ||
-      x - w / 2 < 6 ||
+      x - w / 2 < rect.left + 6 ||
       x + w / 2 > rect.right - 6 ||
       y + h / 2 >= rect.bottom - 8
     )
       continue;
-    el.style.left = x + "px";
-    el.style.top = y + "px";
+    el.style.left = x - rect.left + "px";
+    el.style.top = y - rect.top + "px";
     el.style.visibility = "visible";
   }
 }

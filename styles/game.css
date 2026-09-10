@@ -18,7 +18,7 @@ canvas {
   display: block;
 }
 .overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
@@ -67,7 +67,7 @@ canvas {
   box-shadow: 0 2px 0 #a33f0c;
 }
 #hud {
-  position: fixed;
+  position: absolute;
   top: 10px;
   left: 0;
   right: 0;
@@ -105,7 +105,7 @@ canvas {
   display: none !important;
 }
 #modeRow {
-  position: fixed;
+  position: absolute;
   bottom: calc(10px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
@@ -137,7 +137,7 @@ canvas {
   display: none !important;
 }
 #joyBase {
-  position: fixed;
+  position: absolute;
   width: 124px;
   height: 124px;
   border-radius: 50%;
@@ -148,7 +148,7 @@ canvas {
   pointer-events: none;
 }
 #joyKnob {
-  position: fixed;
+  position: absolute;
   width: 54px;
   height: 54px;
   border-radius: 50%;
@@ -158,7 +158,7 @@ canvas {
   pointer-events: none;
 }
 #toast {
-  position: fixed;
+  position: absolute;
   top: 70px;
   left: 50%;
   transform: translateX(-50%);
@@ -174,7 +174,7 @@ canvas {
   white-space: nowrap;
 }
 #flash {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: radial-gradient(circle, transparent 40%, rgba(255, 30, 30, 0.45));
   opacity: 0;
@@ -186,7 +186,7 @@ canvas {
   display: none !important;
 }
 #phaseBar {
-  position: fixed;
+  position: absolute;
   top: 70px;
   left: 50%;
   transform: translateX(-50%);
@@ -242,7 +242,7 @@ canvas {
   transform: scale(0.97);
 }
 #combo {
-  position: fixed;
+  position: absolute;
   right: 14px;
   top: 104px;
   color: #ffe4a7;
@@ -255,7 +255,7 @@ canvas {
   transition: opacity 0.2s;
 }
 #waveBanner {
-  position: fixed;
+  position: absolute;
   left: 50%;
   top: 34%;
   transform: translate(-50%, -50%) scale(0.9);
@@ -279,7 +279,7 @@ canvas {
   transform: translate(-50%, -50%) scale(1);
 }
 .worldPop {
-  position: fixed;
+  position: absolute;
   z-index: 14;
   pointer-events: none;
   font-weight: 1000;
@@ -304,7 +304,7 @@ canvas {
   }
 }
 #baseBadge {
-  position: fixed;
+  position: absolute;
   right: 10px;
   top: 88px;
   z-index: 12;
@@ -346,11 +346,11 @@ canvas {
 /* Fixed stacking: canvas 0, labels 5, joystick 9, HUD 30, modal 50. */
 html,
 body {
-  height: var(--viewport-height, 100%);
+  height: 100%;
   overscroll-behavior: none;
 }
 #gameCanvas {
-  position: fixed;
+  position: absolute;
   left: 0;
   top: 0;
   z-index: 0;
@@ -509,13 +509,13 @@ body {
   min-height: 0;
 }
 #groundLabels {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 5;
   pointer-events: none;
 }
 .groundHud {
-  position: fixed;
+  position: absolute;
   visibility: hidden;
   transform: translate(-50%, -50%);
   padding: 4px 7px;
@@ -546,7 +546,7 @@ body {
   opacity: 0.65;
 }
 #runtimeStatus {
-  position: fixed;
+  position: absolute;
   top: 45%;
   left: 10%;
   right: 10%;
@@ -588,4 +588,20 @@ body {
   .upCard {
     padding: 8px;
   }
+}
+
+/* One visual viewport owns canvas, HUD, labels and dialogs. No transformed layer. */
+body {
+  position: fixed;
+  inset: 0;
+}
+#gameViewport {
+  position: fixed;
+  left: var(--viewport-left, 0px);
+  top: var(--viewport-top, 0px);
+  width: var(--viewport-width, 100%);
+  height: var(--viewport-height, 100%);
+  height: var(--viewport-height, 100dvh);
+  overflow: hidden;
+  isolation: isolate;
 }

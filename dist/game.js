@@ -293,7 +293,7 @@ function initScene() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  document.body.appendChild(renderer.domElement);
+  $("gameViewport").appendChild(renderer.domElement);
   clock = new THREE.Clock();
   hemi = new THREE.HemisphereLight(0xcfe5ff, 0x8a97a8, 0.9);
   scene.add(hemi);
@@ -701,9 +701,10 @@ function worldPop(textMsg, pos, color = "#fff") {
   el.className = "worldPop";
   el.textContent = textMsg;
   el.style.color = color;
-  el.style.left = (v.x * 0.5 + 0.5) * innerWidth + "px";
-  el.style.top = (-v.y * 0.5 + 0.5) * innerHeight + "px";
-  document.body.appendChild(el);
+  const rect = renderer.domElement.getBoundingClientRect();
+  el.style.left = (v.x * 0.5 + 0.5) * rect.width + "px";
+  el.style.top = (-v.y * 0.5 + 0.5) * rect.height + "px";
+  $("gameViewport").appendChild(el);
   setTimeout(() => el.remove(), 760);
 }
 
@@ -3124,13 +3125,13 @@ function projectGroundTags(t) {
       labelVector.z <= -1 ||
       labelVector.z >= 1 ||
       y - h / 2 <= hudBottom ||
-      x - w / 2 < 6 ||
+      x - w / 2 < rect.left + 6 ||
       x + w / 2 > rect.right - 6 ||
       y + h / 2 >= rect.bottom - 8
     )
       continue;
-    el.style.left = x + "px";
-    el.style.top = y + "px";
+    el.style.left = x - rect.left + "px";
+    el.style.top = y - rect.top + "px";
     el.style.visibility = "visible";
   }
 }
@@ -3383,18 +3384,20 @@ function bindInput() {
       e.preventDefault();
       joyId = e.pointerId;
       canvas.setPointerCapture?.(joyId);
-      joyBase._ox = e.clientX;
-      joyBase._oy = e.clientY;
-      joyBase.style.cssText = `display:block;left:${e.clientX - 62}px;top:${e.clientY - 62}px`;
-      joyKnob.style.cssText = `display:block;left:${e.clientX - 27}px;top:${e.clientY - 27}px`;
+      const rect = canvas.getBoundingClientRect();
+      joyBase._ox = e.clientX - rect.left;
+      joyBase._oy = e.clientY - rect.top;
+      joyBase.style.cssText = `display:block;left:${joyBase._ox - 62}px;top:${joyBase._oy - 62}px`;
+      joyKnob.style.cssText = `display:block;left:${joyBase._ox - 27}px;top:${joyBase._oy - 27}px`;
       audioCtx?.resume();
     },
     { passive: false },
   );
   addEventListener("pointermove", (e) => {
     if (e.pointerId !== joyId) return;
-    let dx = e.clientX - joyBase._ox,
-      dy = e.clientY - joyBase._oy;
+    const rect = canvas.getBoundingClientRect();
+    let dx = e.clientX - rect.left - joyBase._ox,
+      dy = e.clientY - rect.top - joyBase._oy;
     const d = Math.hypot(dx, dy),
       max = 48;
     if (d > max) {
@@ -3713,15 +3716,24 @@ function nightEnemyCount(n) {
 // One animation loop. Rendering failures are visible rather than an unresponsive start button.
 function resizeViewport() {
   resetInput();
-  const width = Math.max(1, document.documentElement.clientWidth),
-    height = Math.max(1, window.visualViewport?.height || innerHeight);
-  renderer.setSize(width, height);
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-  document.documentElement.style.setProperty(
-    "--viewport-height",
-    height + "px",
-  );
+  const visual = window.visualViewport,
+    width = Math.max(
+      1,
+      visual?.width || document.documentElement.clientWidth || innerWidth,
+    ),
+    height = Math.max(1, visual?.height || innerHeight),
+    left = visual?.offsetLeft || 0,
+    top = visual?.offsetTop || 0,
+    style = $("gameViewport").style;
+  style.setProperty("--viewport-width", width + "px");
+  style.setProperty("--viewport-height", height + "px");
+  style.setProperty("--viewport-left", left + "px");
+  style.setProperty("--viewport-top", top + "px");
+  if (renderer) renderer.setSize(width, height);
+  if (camera) {
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+  }
 }
 function reportStartupError(error) {
   console.error("Frost Defense startup failed", error);
@@ -3751,14 +3763,21 @@ function frame() {
 }
 function boot() {
   try {
+    // Fit the title/errors as well, even if GPU initialization fails.
+    resizeViewport();
+    addEventListener("resize", resizeViewport);
+    addEventListener("pageshow", resizeViewport);
+    window.visualViewport?.addEventListener("resize", resizeViewport);
+    window.visualViewport?.addEventListener("scroll", resizeViewport);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) resizeViewport();
+    });
     initScene();
     renderer.domElement.id = "gameCanvas";
     renderer.domElement.setAttribute("aria-label", "移動操作用ゲーム画面");
     renderer.setClearAlpha(1);
     bindInput();
     resizeViewport();
-    addEventListener("resize", resizeViewport);
-    window.visualViewport?.addEventListener("resize", resizeViewport);
     renderer.domElement.addEventListener("webglcontextlost", (e) => {
       e.preventDefault();
       contextLost = true;

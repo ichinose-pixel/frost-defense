@@ -68,7 +68,7 @@
       frame.width = width;
       frame.height = 160;
       frame.title = caption.textContent;
-      frame.srcdoc = `<!doctype html><html lang="ja"><meta charset="utf-8"><base href="${new URL("../", location.href)}"><link rel="stylesheet" href="styles/game.css?v=14"><style>html,body{background:#bad4e2;}</style><body>${clone.outerHTML}</body></html>`;
+      frame.srcdoc = `<!doctype html><html lang="ja"><meta charset="utf-8"><base href="${new URL("../", location.href)}"><link rel="stylesheet" href="styles/game.css?v=14.1"><style>html,body{background:#bad4e2;}</style><body><div id="gameViewport">${clone.outerHTML}</div></body></html>`;
       figure.append(caption, frame);
       document.querySelector("main").append(figure);
     }

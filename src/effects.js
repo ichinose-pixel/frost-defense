@@ -111,9 +111,10 @@ function worldPop(textMsg, pos, color = "#fff") {
   el.className = "worldPop";
   el.textContent = textMsg;
   el.style.color = color;
-  el.style.left = (v.x * 0.5 + 0.5) * innerWidth + "px";
-  el.style.top = (-v.y * 0.5 + 0.5) * innerHeight + "px";
-  document.body.appendChild(el);
+  const rect = renderer.domElement.getBoundingClientRect();
+  el.style.left = (v.x * 0.5 + 0.5) * rect.width + "px";
+  el.style.top = (-v.y * 0.5 + 0.5) * rect.height + "px";
+  $("gameViewport").appendChild(el);
   setTimeout(() => el.remove(), 760);
 }
 

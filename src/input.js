@@ -30,18 +30,20 @@ function bindInput() {
       e.preventDefault();
       joyId = e.pointerId;
       canvas.setPointerCapture?.(joyId);
-      joyBase._ox = e.clientX;
-      joyBase._oy = e.clientY;
-      joyBase.style.cssText = `display:block;left:${e.clientX - 62}px;top:${e.clientY - 62}px`;
-      joyKnob.style.cssText = `display:block;left:${e.clientX - 27}px;top:${e.clientY - 27}px`;
+      const rect = canvas.getBoundingClientRect();
+      joyBase._ox = e.clientX - rect.left;
+      joyBase._oy = e.clientY - rect.top;
+      joyBase.style.cssText = `display:block;left:${joyBase._ox - 62}px;top:${joyBase._oy - 62}px`;
+      joyKnob.style.cssText = `display:block;left:${joyBase._ox - 27}px;top:${joyBase._oy - 27}px`;
       audioCtx?.resume();
     },
     { passive: false },
   );
   addEventListener("pointermove", (e) => {
     if (e.pointerId !== joyId) return;
-    let dx = e.clientX - joyBase._ox,
-      dy = e.clientY - joyBase._oy;
+    const rect = canvas.getBoundingClientRect();
+    let dx = e.clientX - rect.left - joyBase._ox,
+      dy = e.clientY - rect.top - joyBase._oy;
     const d = Math.hypot(dx, dy),
       max = 48;
     if (d > max) {

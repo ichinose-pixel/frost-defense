@@ -513,3 +513,31 @@ test("HUD distinguishes night countdown and remaining enemies; danger meters cla
   assert.equal(run("$('fuelChip').classList.contains('warning')"), true);
   assert.equal(run("$('baseChip').classList.contains('warning')"), true);
 });
+
+test("visual viewport offset and toolbar resize keep canvas and UI in one coordinate system", () => {
+  const { run } = harness(false);
+  run(readFileSync(new URL("../src/bootstrap.js", import.meta.url), "utf8"));
+  run(`const properties={};$('gameViewport').style.setProperty=(k,v)=>properties[k]=v;
+    renderer.setSize=(w,h)=>{renderer.testSize=[w,h]};
+    window.visualViewport={width:360,height:640,offsetLeft:12,offsetTop:140};
+    keys.KeyW=true;resizeViewport();`);
+  assert.equal(run("properties['--viewport-top']"), "140px");
+  assert.equal(run("properties['--viewport-left']"), "12px");
+  assert.equal(run("properties['--viewport-height']"), "640px");
+  assert.equal(run("renderer.testSize.join()"), "360,640");
+  assert.equal(run("camera.aspect"), 360 / 640);
+  assert.equal(run("Object.keys(keys).length"), 0);
+  run(`startGame();renderer.domElement.getBoundingClientRect=()=>({left:12,top:140,width:360,height:640,right:372,bottom:780});
+    renderer.domElement.pointerdown({pointerId:4,button:0,clientX:132,clientY:500,preventDefault(){}});`);
+  assert.equal(run("joyBase._ox"), 120);
+  assert.equal(run("joyBase._oy"), 360);
+  assert.match(run("joyKnob.style.cssText"), /left:93px;top:333px/);
+  run(
+    `window.visualViewport={width:844,height:390,offsetTop:0,offsetLeft:0};resizeViewport()`,
+  );
+  assert.equal(run("properties['--viewport-top']"), "0px");
+  assert.equal(run("renderer.testSize.join()"), "844,390");
+  assert.equal(run("joyId"), null);
+  run("window.visualViewport=undefined;resizeViewport()");
+  assert.equal(run("renderer.testSize.join()"), "390,844");
+});

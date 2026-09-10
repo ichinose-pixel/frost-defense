@@ -172,7 +172,7 @@ function initScene() {
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setSize(innerWidth, innerHeight);
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  document.body.appendChild(renderer.domElement);
+  $("gameViewport").appendChild(renderer.domElement);
   clock = new THREE.Clock();
   hemi = new THREE.HemisphereLight(0xcfe5ff, 0x8a97a8, 0.9);
   scene.add(hemi);
