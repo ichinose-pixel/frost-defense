@@ -215,9 +215,16 @@ function harvestCluster(x, y, z, type) {
     if (b.t === "coal") coalGain += 2;
     else woodGain += b.t === "wood" ? 2 : 1;
     blocks.delete(key(rx, ry, rz));
-    burst(rx, ry + 0.5, rz, b.t === "coal" ? 0x454a56 : 0x8a5a2b, 4);
+    spawnVoxelBreakup(
+      rx,
+      ry + 0.5,
+      rz,
+      b.t === "coal" ? 0x53677c : b.t === "leaf" ? 0xa9c9cb : 0xbb8853,
+      3,
+    );
   }
   rebuild();
+  harvestFeedback(x, y, z, type);
   if (woodGain) {
     wood += woodGain;
     sfx("wood");
@@ -244,7 +251,6 @@ function harvestCluster(x, y, z, type) {
     );
     worldPop("+" + coalGain + " 石炭", new THREE.Vector3(x, 2.2, z), "#b8d3ff");
   }
-  toast(coalGain ? "+" + coalGain + " 🪨" : "+" + woodGain + " 🌲");
   updateHUD();
   return true;
 }

@@ -55,6 +55,8 @@ function update(dt, t) {
   updateEnemies(dt, t);
   updateDefenseCombat(dt, t);
   updateProjectiles(dt, t);
+  updatePlayerFeedback(dt);
+  updateActionStrip();
   ghost.visible = false;
   updateObjective();
   if (fuel <= 0 || baseHP <= 0) gameOver(fuel <= 0);
@@ -192,6 +194,7 @@ function gameOver(froze) {
 
 function startGame() {
   resetInput();
+  resourceHudValues.clear();
   resetEffects();
   resetConstruction();
   resetBaseVisual();
@@ -263,6 +266,7 @@ function startGame() {
   ["hud", "phaseBar"].forEach((id) => $(id).classList.remove("hidden"));
   $("combo").style.opacity = 0;
   updateHUD();
+  updateObjective();
   showWaveBanner("☀️ DAY 1", "中央拠点を育てよう");
   toast("移動だけで採集・建築・防衛");
 }

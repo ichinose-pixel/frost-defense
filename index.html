@@ -6,25 +6,42 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <title>フロスト・ディフェンス v13</title>
-    <link rel="stylesheet" href="styles/game.css?v=13" />
+    <title>フロスト・ディフェンス v14</title>
+    <link rel="stylesheet" href="styles/game.css?v=14" />
   </head>
   <body>
     <div id="hud" class="hidden">
-      <div class="chip">🌲<span id="wood">0</span></div>
-      <div class="chip">🪨<span id="coal">0</span></div>
-      <div class="chip">⚙️<span id="iron">0</span></div>
-      <div class="chip">
-        📅Day <span id="day">1</span> <span id="phase">日中</span>
+      <div class="chip resource wood-chip">
+        <small>木材</small><b>🌲 <span id="wood">0</span></b>
       </div>
-      <div class="chip">🌡️<span id="temp">-10</span>℃</div>
-      <div class="chip">🔥<span id="fire">100</span>%</div>
-      <div class="chip">
-        🏰Lv<span id="baseLv">1</span> <span id="base">100</span>%
+      <div class="chip resource coal-chip">
+        <small>石炭</small><b>🪨 <span id="coal">0</span></b>
+      </div>
+      <div class="chip resource iron-chip">
+        <small>鉄</small><b>⚙️ <span id="iron">0</span></b>
+      </div>
+      <div class="chip status">
+        <small>生存日数</small
+        ><b><span id="phase">🌞</span> <span id="day">1</span><em>/ 7日</em></b>
+      </div>
+      <div class="chip status">
+        <small>気温</small><b><span id="temp">-10</span><em>℃</em></b>
+      </div>
+      <div class="chip status" id="fuelChip">
+        <small>燃料</small><b>🔥 <span id="fire">100</span><em>%</em></b
+        ><i class="meter"><i id="fuelMeter"></i></i>
+      </div>
+      <div class="chip status" id="baseChip">
+        <small>拠点 Lv.<span id="baseLv">1</span></small
+        ><b>🏰 <span id="base">100</span><em>%</em></b
+        ><i class="meter"><i id="baseMeter"></i></i>
+      </div>
+      <div id="phaseBar">
+        <span id="phaseCaption">夜まで24秒</span>
+        <div class="phaseTrack"><div id="phaseFill"></div></div>
       </div>
     </div>
     <div id="crosshair" class="hidden">+</div>
-    <div id="phaseBar" class="hidden"><div id="phaseFill"></div></div>
     <div id="baseBadge" class="hidden">🏰 拠点 <span>Lv.1</span></div>
     <div id="missionCard" class="hidden">
       <div class="missionLabel">MISSION</div>
@@ -45,7 +62,7 @@
     <div id="runtimeStatus" role="status" hidden></div>
     <div id="title" class="overlay">
       <h1>❄️ フロスト・ディフェンス</h1>
-      <h2>— 選べる建築・すっきり地面UI v13 —</h2>
+      <h2>— 集める手応え、育つ防衛拠点 v14 —</h2>
       <p>
         <b>操作は移動だけ。</b
         ><br />採集・戦闘は自動。建築は設備のそばで少し立ち止まる。
@@ -65,6 +82,6 @@
       <div id="upgradeCards"></div>
     </div>
     <script src="vendor/three-0.160.0.min.js"></script>
-    <script src="dist/game.js?v=13"></script>
+    <script src="dist/game.js?v=14"></script>
   </body>
 </html>

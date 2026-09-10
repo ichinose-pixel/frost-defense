@@ -3,8 +3,10 @@ import { Script } from "node:vm";
 export const sources = [
   "state",
   "world",
+  "voxel-style",
   "audio",
   "effects",
+  "feedback",
   "base",
   "outposts",
   "buildings",

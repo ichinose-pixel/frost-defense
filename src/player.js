@@ -53,6 +53,8 @@ function buildPlayer() {
   limbs.legR.position.set(0.14, 0.6, 0);
   limbs.legR.geometry.translate(0, -0.29, 0);
   player.add(limbs.legR);
+  player.position.copy(pPos);
+  buildPlayerFeedback();
   scene.add(player);
 }
 

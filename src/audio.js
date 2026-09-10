@@ -31,7 +31,13 @@ function sfx(name) {
   const now = performance.now();
   if (lastSfx[name] && now - lastSfx[name] < 45) return;
   lastSfx[name] = now;
-  if (name === "wood") {
+  if (name === "pickup") {
+    if (lastSfx.pickupNote && now - lastSfx.pickupNote < 100) return;
+    lastSfx.pickupNote = now;
+    tone(880, 0.055, "sine", 0.04, 1.3);
+  } else if (name === "deliver") {
+    tone(420, 0.08, "triangle", 0.055, 0.7);
+  } else if (name === "wood") {
     tone(170, 0.06, "square", 0.08, 1.8);
     tone(280, 0.08, "triangle", 0.06, 1.3);
   } else if (name === "coal") {

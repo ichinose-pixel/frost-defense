@@ -86,6 +86,7 @@ function buildFromPad(p) {
   defenseActionConsumed = true;
   wood -= c.wood;
   coal -= c.coal;
+  showResourceDelivery(c, p.x, p.z);
   p.constructing = true;
   p.progress = 0;
   p.g.visible = false;

@@ -111,8 +111,10 @@ function harness(initialize = true) {
   const names = [
     "state",
     "world",
+    "voxel-style",
     "audio",
     "effects",
+    "feedback",
     "base",
     "outposts",
     "buildings",
@@ -412,4 +414,102 @@ test("only first two nights have fewer enemies", () => {
     run("[1,2,3,4,5,6,7].map(nightEnemyCount).join()"),
     "16,24,35,42,49,56,34",
   );
+});
+
+test("harvest detail is visual: one tree yields the same resources, cannot be harvested twice", () => {
+  const { run } = harness();
+  run(
+    "blocks.clear();for(let y=1;y<=3;y++)blocks.set(key(12,y,12),{t:'wood'});for(let dx=-1;dx<=1;dx++)for(let dz=-1;dz<=1;dz++)blocks.set(key(12+dx,4,12+dz),{t:'leaf'});blocks.set(key(12,5,12),{t:'leaf'});rebuild();flushWorld();const detailedCount=inst.count;const before=wood;",
+  );
+  assert.equal(run("blocks.size"), 13);
+  assert.equal(run("detailedCount"), 56);
+  assert.equal(run("harvestCluster(12,1,12,'wood')"), true);
+  assert.equal(run("wood-before"), 16);
+  assert.equal(run("blocks.size"), 0);
+  assert.equal(run("harvestCluster(12,1,12,'wood')"), false);
+  run(
+    "flushWorld();for(let i=0;i<120;i++){updatePickups(1/60);updateVoxelBreakup(1/60)}",
+  );
+  assert.equal(run("inst.count"), 0);
+  assert.equal(run("wood-before"), 16);
+  assert.equal(run("voxelFragments.length"), 0);
+});
+test("delivery is charged exactly once and fixed target survives player movement and recycling", () => {
+  const { run } = harness();
+  run(
+    "const pad=buildPads[0];buildFromPad(pad);const paid=wood;const packet=flyPickups.find(p=>p.delivery);pPos.set(-20,.5,-20);player.position.copy(pPos);updatePickups(.1)",
+  );
+  assert.equal(run("wood"), 75);
+  assert.equal(run("packet.target.x===pad.x&&packet.target.z===pad.z"), true);
+  assert.equal(
+    run("packet.mesh.position.y>Math.min(packet.from.y,packet.target.y)"),
+    true,
+  );
+  run("for(let i=0;i<60;i++)updatePickups(.02)");
+  assert.equal(run("flyPickups.length"), 0);
+  assert.equal(run("wood"), run("paid"));
+  run("spawnPickupTrail(0,1,0,0xe3ba79,1,player.position)");
+  assert.equal(run("flyPickups[0].mesh.visible"), true);
+});
+test("backpack, debris and delivery budgets remain bounded and retry removes pending visuals", () => {
+  const { run } = harness();
+  run(
+    "wood=coal=iron=9999;updatePlayerFeedback(0);spawnVoxelBreakup(0,2,0,0xffcc88,200);for(let i=0;i<50;i++)showResourceDelivery({wood:100,coal:100,iron:100},0,0);updateVoxelBreakup(.01)",
+  );
+  assert.equal(run("cargoMeshes.filter(c=>c.mesh.visible).length"), 12);
+  assert.equal(run("voxelFragments.length"), 96);
+  assert.equal(run("voxelDebris.count"), 96);
+  assert.equal(run("flyPickups.length"), 128);
+  run(
+    "const oldPack=cargoMeshes[0].mesh;const oldPlayer=player;startGame();startGame()",
+  );
+  assert.equal(run("oldPlayer.parent"), null);
+  assert.equal(run("cargoMeshes.some(c=>c.mesh===oldPack)"), false);
+  assert.equal(run("voxelDebris.count"), 0);
+  assert.equal(run("flyPickups.length"), 0);
+  assert.equal(run("cargoMeshes.length"), 12);
+  assert.equal(run("harvestSwing"), 0);
+  assert.equal(run("scene.children.filter(c=>c===voxelDebris).length"), 1);
+});
+test("footprint progress shows a cancellable dwell, then waits without displacing player", () => {
+  const { run } = harness();
+  run("pPos.set(0,.5,6);updateBuildPads(.4);updateActionStrip()");
+  assert.equal(run("actionStrip.visible"), true);
+  assert.equal(run("actionStrip.scale.x"), 2);
+  assert.equal(run("wood"), 90);
+  run("keys.KeyW=true;updateBuildPads(.01);updateActionStrip()");
+  assert.equal(run("actionStrip.visible"), false);
+  run(
+    "delete keys.KeyW;updateBuildPads(.81);updateBuildPads(1);updateActionStrip()",
+  );
+  assert.equal(run("actionStrip.scale.x"), 4);
+  assert.equal(run("pPos.z"), 6);
+  assert.equal(run("constructionSites.length"), 1);
+});
+test("equipment progression changes visuals without changing harvesting or combat statistics", () => {
+  const { run } = harness();
+  run(
+    "const stats=[wood,coal,iron,playerDmg,moveSpeed].join();baseLevel=4;updatePlayerFeedback(.05)",
+  );
+  assert.equal(run("toolCore.visible"), true);
+  assert.equal(run("toolBlade.material.color.getHex()"), 0xffb957);
+  assert.equal(
+    run("[wood,coal,iron,playerDmg,moveSpeed].join()"),
+    run("stats"),
+  );
+  run("baseLevel=1;updatePlayerFeedback(.05)");
+  assert.equal(run("toolCore.visible"), false);
+});
+test("HUD distinguishes night countdown and remaining enemies; danger meters clamp safely", () => {
+  const { run } = harness();
+  run("phaseT=12.2;updateObjective()");
+  assert.equal(run("$('phaseCaption').textContent"), "夜まで 13秒");
+  run(
+    "phase='night';waveLeft=5;enemies=[{},{}];updateObjective();fuel=-2;baseHP=30;updateHUD()",
+  );
+  assert.equal(run("$('phaseCaption').textContent"), "残り 7体");
+  assert.equal(run("$('fuelMeter').style.width"), "0%");
+  assert.equal(run("$('baseMeter').style.width"), "10%");
+  assert.equal(run("$('fuelChip').classList.contains('warning')"), true);
+  assert.equal(run("$('baseChip').classList.contains('warning')"), true);
 });

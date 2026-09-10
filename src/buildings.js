@@ -306,14 +306,7 @@ function upgradeDefense(hit) {
   const b = blockAt(hit.x, hit.y, hit.z);
   if (b) b.hp = st.maxHp;
   refreshDefenseVisual(hit.x, hit.y, hit.z);
-  spawnPickupTrail(
-    player.position.x,
-    1.1,
-    player.position.z,
-    st.type === "turret" ? 0x8ed1ff : 0xffd27a,
-    12,
-    new THREE.Vector3(hit.x, 1.25, hit.z),
-  );
+  showResourceDelivery(cost, hit.x, hit.z);
   burst(hit.x, 1.2, hit.z, st.type === "turret" ? 0x8ed1ff : 0xffd27a, 18);
   worldPop(
     typeName(st.type) + " Lv." + st.level,
@@ -321,7 +314,6 @@ function upgradeDefense(hit) {
     "#ffe19a",
   );
   sfx("upgrade");
-  showWaveBanner("UPGRADE!", typeName(st.type) + " Lv." + st.level);
   toast(
     typeIcon(st.type) +
       " " +
@@ -349,15 +341,6 @@ function updateDefenseUpgrades(dt) {
     cost = getUpgradeCost(st);
   if (wood >= cost.wood && coal >= cost.coal) {
     st._progress = (st._progress || 0) + dt;
-    if (Math.random() < dt * 8)
-      spawnPickupTrail(
-        player.position.x,
-        0.95,
-        player.position.z,
-        st.type === "turret" ? 0x8ed1ff : 0xffd27a,
-        2,
-        new THREE.Vector3(hit.x, 1.2, hit.z),
-      );
     if (st._progress >= 0.8) {
       st._progress = 0;
       if (upgradeDefense(hit)) defenseActionConsumed = true;

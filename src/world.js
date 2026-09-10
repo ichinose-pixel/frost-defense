@@ -128,16 +128,29 @@ function buildTerrain() {
 function flushWorld() {
   if (!worldDirty) return;
   worldDirty = false;
-  inst.count = blockArr.length;
   const m = new THREE.Matrix4(),
     c = new THREE.Color();
-  blockArr.forEach((e, i) => {
-    m.makeTranslation(e.x, e.y, e.z);
-    inst.setMatrixAt(i, m);
-    c.setHex(COLORS[e.b.t]);
-    c.multiplyScalar(hashJitter(e.x, e.y, e.z));
-    inst.setColorAt(i, c);
-  });
+  let count = 0,
+    spare = inst.instanceMatrix.count - blockArr.length;
+  for (const e of blockArr) {
+    const parts = resourceVisualParts(e);
+    if (parts && spare >= parts.length - 1) {
+      spare -= parts.length - 1;
+      for (const [dx, dy, dz, w, h, d, color] of parts) {
+        m.makeScale(w, h, d);
+        m.setPosition(e.x + dx, e.y + dy, e.z + dz);
+        inst.setMatrixAt(count, m);
+        c.setHex(color).multiplyScalar(hashJitter(e.x, e.y, e.z));
+        inst.setColorAt(count++, c);
+      }
+    } else {
+      m.makeTranslation(e.x, e.y, e.z);
+      inst.setMatrixAt(count, m);
+      c.setHex(COLORS[e.b.t]).multiplyScalar(hashJitter(e.x, e.y, e.z));
+      inst.setColorAt(count++, c);
+    }
+  }
+  inst.count = count;
   inst.instanceMatrix.needsUpdate = true;
   if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
   inst.computeBoundingSphere();
@@ -168,7 +181,7 @@ function initScene() {
   scene.add(sun);
   const geo = new THREE.BoxGeometry(1, 1, 1),
     mat = new THREE.MeshLambertMaterial();
-  inst = new THREE.InstancedMesh(geo, mat, 8000);
+  inst = new THREE.InstancedMesh(geo, mat, 12000);
   inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   scene.add(inst);
   buildTerrain();

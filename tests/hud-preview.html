@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ja">
+  <meta charset="utf-8" />
+  <title>Frost Defense HUD layout check</title>
+  <style>
+    body {
+      margin: 20px;
+      background: #14243b;
+      color: #eaf4ff;
+      font: 14px sans-serif;
+    }
+    main {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: start;
+    }
+    figure {
+      margin: 0;
+    }
+    figcaption {
+      margin-bottom: 8px;
+    }
+    iframe {
+      border: 1px solid #5f7894;
+      display: block;
+    }
+  </style>
+  <h1>v14 HUD / layout fixture</h1>
+  <p>
+    実際の index.html と styles/game.css
+    を使用。3D・ゲームロジックは実行しません。
+  </p>
+  <main></main>
+  <script type="module">
+    const response = await fetch("../index.html");
+    if (!response.ok) throw new Error("Cannot load game HTML");
+    const page = new DOMParser().parseFromString(
+      await response.text(),
+      "text/html",
+    );
+    const hud = page.getElementById("hud");
+    hud.classList.remove("hidden");
+    const states = [
+      [320, 568, "初期状態"],
+      [390, 844, "大量の資材・燃料不足"],
+      [844, 390, "横画面"],
+    ];
+    for (const [width, height, label] of states) {
+      const clone = hud.cloneNode(true);
+      clone.querySelector("#wood").textContent = width === 320 ? "90" : "9999";
+      clone.querySelector("#coal").textContent = width === 320 ? "36" : "9999";
+      clone.querySelector("#iron").textContent = width === 320 ? "0" : "9999";
+      clone.querySelector("#day").textContent = "3";
+      clone.querySelector("#temp").textContent = "-33";
+      clone.querySelector("#fire").textContent = "22";
+      clone.querySelector("#fuelMeter").style.width = "22%";
+      clone.querySelector("#fuelChip").classList.add("warning");
+      clone.querySelector("#baseMeter").style.width = "76%";
+      clone.querySelector("#base").textContent = "76";
+      clone.querySelector("#baseLv").textContent = "3";
+      clone.querySelector("#phaseCaption").textContent = "夜まで 12秒";
+      clone.querySelector("#phaseFill").style.width = "60%";
+      const figure = document.createElement("figure"),
+        caption = document.createElement("figcaption"),
+        frame = document.createElement("iframe");
+      caption.textContent = `横幅 ${width}px — ${label}`;
+      frame.width = width;
+      frame.height = 160;
+      frame.title = caption.textContent;
+      frame.srcdoc = `<!doctype html><html lang="ja"><meta charset="utf-8"><base href="${new URL("../", location.href)}"><link rel="stylesheet" href="styles/game.css?v=14"><style>html,body{background:#bad4e2;}</style><body>${clone.outerHTML}</body></html>`;
+      figure.append(caption, frame);
+      document.querySelector("main").append(figure);
+    }
+  </script>
+</html>

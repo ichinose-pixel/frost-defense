@@ -249,16 +249,29 @@ function buildTerrain() {
 function flushWorld() {
   if (!worldDirty) return;
   worldDirty = false;
-  inst.count = blockArr.length;
   const m = new THREE.Matrix4(),
     c = new THREE.Color();
-  blockArr.forEach((e, i) => {
-    m.makeTranslation(e.x, e.y, e.z);
-    inst.setMatrixAt(i, m);
-    c.setHex(COLORS[e.b.t]);
-    c.multiplyScalar(hashJitter(e.x, e.y, e.z));
-    inst.setColorAt(i, c);
-  });
+  let count = 0,
+    spare = inst.instanceMatrix.count - blockArr.length;
+  for (const e of blockArr) {
+    const parts = resourceVisualParts(e);
+    if (parts && spare >= parts.length - 1) {
+      spare -= parts.length - 1;
+      for (const [dx, dy, dz, w, h, d, color] of parts) {
+        m.makeScale(w, h, d);
+        m.setPosition(e.x + dx, e.y + dy, e.z + dz);
+        inst.setMatrixAt(count, m);
+        c.setHex(color).multiplyScalar(hashJitter(e.x, e.y, e.z));
+        inst.setColorAt(count++, c);
+      }
+    } else {
+      m.makeTranslation(e.x, e.y, e.z);
+      inst.setMatrixAt(count, m);
+      c.setHex(COLORS[e.b.t]).multiplyScalar(hashJitter(e.x, e.y, e.z));
+      inst.setColorAt(count++, c);
+    }
+  }
+  inst.count = count;
   inst.instanceMatrix.needsUpdate = true;
   if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
   inst.computeBoundingSphere();
@@ -289,7 +302,7 @@ function initScene() {
   scene.add(sun);
   const geo = new THREE.BoxGeometry(1, 1, 1),
     mat = new THREE.MeshLambertMaterial();
-  inst = new THREE.InstancedMesh(geo, mat, 8000);
+  inst = new THREE.InstancedMesh(geo, mat, 12000);
   inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   scene.add(inst);
   buildTerrain();
@@ -468,6 +481,36 @@ function updateEnvironment(dt, t) {
 }
 
 
+// ---- voxel-style ----
+// Visual sub-voxels use the existing world instancing draw. Logical resource cells stay intact.
+// Reserve one slot per remaining logical block; detail degrades safely if capacity is tight.
+function resourceVisualParts(e) {
+  const { x, y, z, b } = e,
+    j = hashJitter(x, y, z);
+  if (b.t === "wood")
+    return [
+      [0, 0, 0, 0.44, 1, 0.44, 0x92623e],
+      [0.23, 0.13, 0, 0.06, 0.53, 0.36, 0xc08b56],
+    ];
+  if (b.t === "leaf")
+    return [
+      [-0.23, -0.03, -0.23, 0.48, 0.6 * j, 0.48, 0x416e76],
+      [0.23, 0.04, -0.23, 0.48, 0.72 * j, 0.48, 0x4f8187],
+      [-0.23, 0.08, 0.23, 0.48, 0.65 * j, 0.48, 0x568891],
+      [0.23, -0.03, 0.23, 0.48, 0.55 * j, 0.48, 0x3e6971],
+      [0, 0.4, 0, 0.86, 0.13, 0.84, 0xe4f2f6],
+    ];
+  if (b.t === "coal")
+    return [
+      [-0.21, -0.15, 0, 0.5, 0.68, 0.72, 0x354251],
+      [0.22, -0.04, -0.13, 0.44, 0.85, 0.54, 0x52677c],
+      [0.15, -0.17, 0.29, 0.5, 0.64, 0.28, 0x728b9e],
+      [-0.2, 0.22, 0, 0.42, 0.1, 0.59, 0xd6e5ec],
+    ];
+  return null;
+}
+
+
 // ---- audio ----
 // audio system — v12, integrated from the deployed v11.
 
@@ -502,7 +545,13 @@ function sfx(name) {
   const now = performance.now();
   if (lastSfx[name] && now - lastSfx[name] < 45) return;
   lastSfx[name] = now;
-  if (name === "wood") {
+  if (name === "pickup") {
+    if (lastSfx.pickupNote && now - lastSfx.pickupNote < 100) return;
+    lastSfx.pickupNote = now;
+    tone(880, 0.055, "sine", 0.04, 1.3);
+  } else if (name === "deliver") {
+    tone(420, 0.08, "triangle", 0.055, 0.7);
+  } else if (name === "wood") {
     tone(170, 0.06, "square", 0.08, 1.8);
     tone(280, 0.08, "triangle", 0.06, 1.3);
   } else if (name === "coal") {
@@ -564,8 +613,9 @@ function spawnPickupTrail(x, y, z, colorHex, count, target) {
   for (let i = 0; i < count && flyPickups.length < 128; i++) {
     const mesh =
       pickupPool.pop() || new THREE.Mesh(pickupGeometry, pickupMaterial);
-    const size = 0.12 + Math.random() * 0.06;
-    mesh.scale.setScalar(size);
+    const size = 0.19 + Math.random() * 0.05;
+    mesh.visible = true;
+    mesh.scale.set(size, size, colorHex === 0xe3ba79 ? size * 1.7 : size);
     mesh.material =
       pickupMaterials.get(colorHex) || makePickupMaterial(colorHex);
     mesh.position.set(
@@ -586,7 +636,8 @@ function spawnPickupTrail(x, y, z, colorHex, count, target) {
       followPlayer:
         Math.hypot(target.x - player.position.x, target.z - player.position.z) <
         0.1,
-      life: 0.85 + Math.random() * 0.25,
+      age: 0,
+      life: 1.1 + Math.random() * 0.25,
     });
   }
 }
@@ -640,6 +691,7 @@ function updateParticles(dt) {
   debrisPts.geometry.attributes.color.needsUpdate = true;
   updatePickups(dt);
   updateDeathEffects(dt);
+  updateVoxelBreakup(dt);
 }
 
 function worldPop(textMsg, pos, color = "#fff") {
@@ -686,16 +738,31 @@ function recyclePickup(p) {
 function updatePickups(dt) {
   for (let i = flyPickups.length - 1; i >= 0; i--) {
     const p = flyPickups[i];
+    if (p.delivery) {
+      p.age += dt;
+      const q = Math.max(0, Math.min(1, p.age / p.duration));
+      p.mesh.visible = p.age >= 0;
+      p.mesh.position.lerpVectors(p.from, p.target, q);
+      p.mesh.position.y += Math.sin(q * Math.PI) * 1.3;
+      p.mesh.rotation.x += dt * 5;
+      if (q >= 1) {
+        recyclePickup(p);
+        flyPickups.splice(i, 1);
+      }
+      continue;
+    }
+    p.age += dt;
     p.life -= dt;
     if (p.followPlayer) p.target.copy(player.position).y += 1.1;
     effectDirection.copy(p.target).sub(p.pos);
     const d = Math.max(0.001, effectDirection.length());
     effectDirection.multiplyScalar((8 + d * 1.6) / d);
-    p.vel.lerp(effectDirection, Math.min(1, dt * 7));
+    if (p.age > 0.12) p.vel.lerp(effectDirection, Math.min(1, dt * 10));
     p.pos.addScaledVector(p.vel, dt);
     p.mesh.rotation.x += dt * 5;
     p.mesh.rotation.z += dt * 3;
-    if (p.life <= 0 || d < 0.38) {
+    if (p.life <= 0 || (p.age > 0.12 && d < 0.38)) {
+      if (p.followPlayer && d < 0.38) sfx("pickup");
       recyclePickup(p);
       flyPickups.splice(i, 1);
     }
@@ -736,12 +803,237 @@ function updateDeathEffects(dt) {
   }
 }
 function resetEffects() {
+  resetFeedback();
   for (const p of flyPickups) recyclePickup(p);
   flyPickups = [];
   for (const e of deathEffects) disposeObject(e.g);
   deathEffects.length = 0;
   for (const d of debrisData || []) d.life = 0;
   document.querySelectorAll(".worldPop").forEach((el) => el.remove());
+}
+
+
+// ---- feedback ----
+// Presentation only: never changes resources, combat statistics or player position.
+// A fixed backpack, one instanced debris draw and one progress strip bound mobile cost.
+const cargoColors = { wood: 0xdba66a, coal: 0x53677c, iron: 0xa0c8e0 };
+let cargoMeshes = [],
+  harvestTool = null,
+  toolBlade = null,
+  toolCore = null;
+let equipmentLevel = 0,
+  harvestSwing = 0,
+  cargoBounce = 0;
+let voxelDebris = null,
+  actionStrip = null;
+const voxelFragments = [],
+  feedbackDummy = new THREE.Object3D();
+const VOXEL_LIMIT = 96;
+
+function buildPlayerFeedback() {
+  cargoMeshes = [];
+  equipmentLevel = 0;
+  const pack = box(0.64, 0.55, 0.22, 0x624c39);
+  pack.position.set(0, 1.05, -0.3);
+  player.add(pack);
+  addVoxelDetails(player, [
+    [0.08, 0.66, 0.05, 0xd2ae73, -0.22, 1.04, -0.44],
+    [0.08, 0.66, 0.05, 0xd2ae73, 0.22, 1.04, -0.44],
+  ]);
+  for (const [column, type] of ["wood", "coal", "iron"].entries()) {
+    for (let i = 0; i < 4; i++) {
+      const mesh = box(
+        type === "wood" ? 0.3 : 0.18,
+        0.14,
+        type === "wood" ? 0.2 : 0.18,
+        cargoColors[type],
+      );
+      mesh.position.set((column - 1) * 0.24, 1.37 + i * 0.16, -0.34);
+      mesh.visible = false;
+      player.add(mesh);
+      cargoMeshes.push({ mesh, type, index: i });
+    }
+  }
+  harvestTool = new THREE.Group();
+  const handle = box(0.08, 0.62, 0.08, 0x94623d);
+  harvestTool.add(handle);
+  toolBlade = box(0.32, 0.23, 0.12, 0xc1dbe4);
+  toolBlade.position.set(0.1, -0.24, 0);
+  harvestTool.add(toolBlade);
+  toolCore = box(0.13, 0.15, 0.15, 0xffb64f);
+  toolCore.position.set(0, -0.23, 0);
+  harvestTool.add(toolCore);
+  harvestTool.position.set(0, -0.5, 0.19);
+  harvestTool.rotation.z = -0.25;
+  limbs.armR.add(harvestTool);
+  updatePlayerFeedback(0);
+}
+function updatePlayerFeedback(dt) {
+  if (!harvestTool) return;
+  if (equipmentLevel !== baseLevel) {
+    equipmentLevel = baseLevel;
+    toolBlade.scale.set(baseLevel >= 3 ? 1.35 : 1, baseLevel >= 2 ? 1.2 : 1, 1);
+    toolBlade.material.color.set(
+      baseLevel >= 4 ? 0xffb957 : baseLevel >= 2 ? 0x85d5e7 : 0xc1dbe4,
+    );
+    toolCore.visible = baseLevel >= 3;
+  }
+  cargoBounce = Math.max(0, cargoBounce - dt);
+  const inventory = { wood, coal, iron };
+  for (const c of cargoMeshes) {
+    // Each visible piece represents a band of stock, not a capacity or another inventory.
+    c.mesh.visible =
+      c.index < Math.min(4, Math.ceil(Math.max(0, inventory[c.type]) / 25));
+    c.mesh.scale.setScalar(1 + Math.sin((cargoBounce / 0.3) * Math.PI) * 0.12);
+  }
+  harvestSwing = Math.max(0, harvestSwing - dt);
+  harvestTool.visible = phase === "day" || harvestSwing > 0;
+  if (harvestSwing > 0 && !(phase === "night" && shootCD > 0.25))
+    limbs.armR.rotation.x =
+      -0.4 - Math.sin((1 - harvestSwing / 0.24) * Math.PI) * 1.5;
+}
+function harvestFeedback(x, y, z, type) {
+  harvestSwing = 0.24;
+  cargoBounce = 0.3;
+  if (!movementRequested() && phase === "day")
+    player.rotation.y = Math.atan2(x - pPos.x, z - pPos.z);
+}
+function ensureFeedbackMeshes() {
+  if (!voxelDebris) {
+    voxelDebris = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshLambertMaterial(),
+      VOXEL_LIMIT,
+    );
+    voxelDebris.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    voxelDebris.count = 0;
+    voxelDebris.frustumCulled = false;
+    scene.add(voxelDebris);
+    actionStrip = box(1, 0.035, 0.12, 0xffd36b);
+    actionStrip.visible = false;
+    scene.add(actionStrip);
+  }
+}
+function spawnVoxelBreakup(x, y, z, color, count = 3) {
+  ensureFeedbackMeshes();
+  for (let i = 0; i < count && voxelFragments.length < VOXEL_LIMIT; i++)
+    voxelFragments.push({
+      x: x + (Math.random() - 0.5) * 0.45,
+      y,
+      z: z + (Math.random() - 0.5) * 0.45,
+      vx: (Math.random() - 0.5) * 4,
+      vy: 1.5 + Math.random() * 2,
+      vz: (Math.random() - 0.5) * 4,
+      age: 0,
+      life: 0.55 + Math.random() * 0.25,
+      size: 0.14 + Math.random() * 0.13,
+      color,
+    });
+}
+function updateVoxelBreakup(dt) {
+  if (!voxelDebris) return;
+  for (let i = voxelFragments.length - 1; i >= 0; i--) {
+    const f = voxelFragments[i];
+    f.age += dt;
+    if (f.age >= f.life) {
+      voxelFragments.splice(i, 1);
+      continue;
+    }
+    f.vy -= 10 * dt;
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+    f.z += f.vz * dt;
+    if (f.y < 0.6) {
+      f.y = 0.6;
+      f.vy = Math.abs(f.vy) * 0.22;
+      f.vx *= 0.7;
+      f.vz *= 0.7;
+    }
+  }
+  voxelDebris.count = voxelFragments.length;
+  voxelFragments.forEach((f, i) => {
+    feedbackDummy.position.set(f.x, f.y, f.z);
+    feedbackDummy.rotation.set(f.age * 6, f.age * 4, f.age * 3);
+    feedbackDummy.scale.setScalar(
+      f.size * Math.min(1, (f.life - f.age) / 0.18),
+    );
+    feedbackDummy.updateMatrix();
+    voxelDebris.setMatrixAt(i, feedbackDummy.matrix);
+    voxelDebris.setColorAt(i, new THREE.Color(f.color));
+  });
+  voxelDebris.instanceMatrix.needsUpdate = true;
+  if (voxelDebris.instanceColor) voxelDebris.instanceColor.needsUpdate = true;
+}
+function showResourceDelivery(cost, x, z) {
+  // Call only AFTER the authoritative transaction succeeds. Visual packets never charge.
+  for (const type of ["wood", "coal", "iron"]) {
+    if (!(cost[type] > 0)) continue;
+    const count = Math.min(4, Math.ceil(cost[type] / 10));
+    for (let i = 0; i < count && flyPickups.length < 128; i++) {
+      const mesh =
+        pickupPool.pop() || new THREE.Mesh(pickupGeometry, pickupMaterial);
+      mesh.material =
+        pickupMaterials.get(cargoColors[type]) ||
+        makePickupMaterial(cargoColors[type]);
+      mesh.scale.set(type === "wood" ? 0.35 : 0.22, 0.2, 0.22);
+      const from = pPos.clone().add(new THREE.Vector3(0, 1.05, 0));
+      mesh.position.copy(from);
+      mesh.visible = false;
+      scene.add(mesh);
+      flyPickups.push({
+        mesh,
+        delivery: true,
+        from,
+        target: new THREE.Vector3(x, 1, z),
+        age: -i * 0.07,
+        duration: 0.45,
+      });
+    }
+  }
+  sfx("deliver");
+}
+function updateActionStrip() {
+  ensureFeedbackMeshes();
+  actionStrip.visible = false;
+  if (!running) return;
+  const tag = focusedGroundTag();
+  if (!tag) return;
+  let q = 0,
+    width = 1.5,
+    depth = 1.5;
+  const pad = buildPads.find((p) => p.tag === tag);
+  if (pad) {
+    const f = defenseFootprint(pad.type, pad.x, pad.z);
+    width = f.width;
+    depth = f.depth;
+    const site = constructionSites.find((s) => s.p === pad);
+    const st = defenseState.get(key(pad.x, 1, pad.z));
+    q = site
+      ? Math.min(1, site.t / site.duration)
+      : st
+        ? (st._progress || 0) / 0.8
+        : pad.progress / 0.8;
+  } else if (tag === baseGroundTag) {
+    q = baseUpgradeProgress / 0.65;
+    width = 2.4;
+    depth = 4.8;
+  }
+  if (!(q > 0)) return;
+  q = Math.min(1, q);
+  actionStrip.visible = true;
+  actionStrip.scale.x = width * q;
+  actionStrip.position.set(
+    tag.position.x - (width * (1 - q)) / 2,
+    0.61,
+    tag.position.z + depth / 2 + 0.1,
+  );
+  actionStrip.material.color.set(q >= 1 ? 0x86f0b1 : 0xffd36b);
+}
+function resetFeedback() {
+  voxelFragments.length = 0;
+  harvestSwing = cargoBounce = 0;
+  if (voxelDebris) voxelDebris.count = 0;
+  if (actionStrip) actionStrip.visible = false;
 }
 
 
@@ -832,6 +1124,7 @@ function upgradeBase() {
   wood -= c.wood;
   coal -= c.coal;
   iron -= c.iron;
+  showResourceDelivery(c, 0, 0);
   baseLevel++;
   baseUpgradeProgress = 0;
   baseMax += 120;
@@ -849,6 +1142,8 @@ function upgradeBase() {
   }
   refreshBaseVisual();
   updateCampVisual();
+  cargoBounce = 0.3;
+  spawnVoxelBreakup(0, 1.8, 0, 0xffd36b, 20);
   updateHUD();
   sfx("base");
   showWaveBanner(
@@ -959,14 +1254,7 @@ function updateAutoFuel(dt, t) {
     coal -= 10;
     fuel = Math.min(100, fuel + 30);
     fuelAutoCD = 1.2;
-    spawnPickupTrail(
-      player.position.x,
-      1,
-      player.position.z,
-      0xffb35c,
-      8,
-      new THREE.Vector3(0, 1, 0),
-    );
+    showResourceDelivery({ coal: 10 }, 0, 0);
     burst(0, 1, 0, 0xffaa44, 12);
     toast("🔥 石炭を自動投入 +30%");
     updateHUD();
@@ -1517,14 +1805,7 @@ function upgradeDefense(hit) {
   const b = blockAt(hit.x, hit.y, hit.z);
   if (b) b.hp = st.maxHp;
   refreshDefenseVisual(hit.x, hit.y, hit.z);
-  spawnPickupTrail(
-    player.position.x,
-    1.1,
-    player.position.z,
-    st.type === "turret" ? 0x8ed1ff : 0xffd27a,
-    12,
-    new THREE.Vector3(hit.x, 1.25, hit.z),
-  );
+  showResourceDelivery(cost, hit.x, hit.z);
   burst(hit.x, 1.2, hit.z, st.type === "turret" ? 0x8ed1ff : 0xffd27a, 18);
   worldPop(
     typeName(st.type) + " Lv." + st.level,
@@ -1532,7 +1813,6 @@ function upgradeDefense(hit) {
     "#ffe19a",
   );
   sfx("upgrade");
-  showWaveBanner("UPGRADE!", typeName(st.type) + " Lv." + st.level);
   toast(
     typeIcon(st.type) +
       " " +
@@ -1560,15 +1840,6 @@ function updateDefenseUpgrades(dt) {
     cost = getUpgradeCost(st);
   if (wood >= cost.wood && coal >= cost.coal) {
     st._progress = (st._progress || 0) + dt;
-    if (Math.random() < dt * 8)
-      spawnPickupTrail(
-        player.position.x,
-        0.95,
-        player.position.z,
-        st.type === "turret" ? 0x8ed1ff : 0xffd27a,
-        2,
-        new THREE.Vector3(hit.x, 1.2, hit.z),
-      );
     if (st._progress >= 0.8) {
       st._progress = 0;
       if (upgradeDefense(hit)) defenseActionConsumed = true;
@@ -1707,6 +1978,8 @@ function buildPlayer() {
   limbs.legR.position.set(0.14, 0.6, 0);
   limbs.legR.geometry.translate(0, -0.29, 0);
   player.add(limbs.legR);
+  player.position.copy(pPos);
+  buildPlayerFeedback();
   scene.add(player);
 }
 
@@ -2456,9 +2729,16 @@ function harvestCluster(x, y, z, type) {
     if (b.t === "coal") coalGain += 2;
     else woodGain += b.t === "wood" ? 2 : 1;
     blocks.delete(key(rx, ry, rz));
-    burst(rx, ry + 0.5, rz, b.t === "coal" ? 0x454a56 : 0x8a5a2b, 4);
+    spawnVoxelBreakup(
+      rx,
+      ry + 0.5,
+      rz,
+      b.t === "coal" ? 0x53677c : b.t === "leaf" ? 0xa9c9cb : 0xbb8853,
+      3,
+    );
   }
   rebuild();
+  harvestFeedback(x, y, z, type);
   if (woodGain) {
     wood += woodGain;
     sfx("wood");
@@ -2485,7 +2765,6 @@ function harvestCluster(x, y, z, type) {
     );
     worldPop("+" + coalGain + " 石炭", new THREE.Vector3(x, 2.2, z), "#b8d3ff");
   }
-  toast(coalGain ? "+" + coalGain + " 🪨" : "+" + woodGain + " 🌲");
   updateHUD();
   return true;
 }
@@ -2560,11 +2839,47 @@ function updateObjective() {
   const pct =
     phase === "day"
       ? Math.max(0, Math.min(100, (phaseT / (day === 1 ? 24 : 20)) * 100))
-      : Math.max(0, Math.min(100, fuel));
+      : Math.max(
+          0,
+          Math.min(
+            100,
+            ((waveLeft + enemies.length) / nightEnemyCount(day)) * 100,
+          ),
+        );
   $("phaseFill").style.width = pct + "%";
+  $("phaseCaption").textContent =
+    phase === "day"
+      ? "夜まで " + Math.max(0, Math.ceil(phaseT)) + "秒"
+      : "残り " + (waveLeft + enemies.length) + "体";
 }
 
+const resourceHudValues = new Map();
 function updateHUD() {
+  for (const [id, value] of [
+    ["wood", wood],
+    ["coal", coal],
+    ["iron", iron],
+  ]) {
+    const old = resourceHudValues.get(id),
+      chip = $(id).parentElement?.parentElement;
+    if (old !== undefined && old !== value && chip) {
+      chip.classList.remove("gained", "spent");
+      // One local layout only on a resource transaction, never per animation frame.
+      void chip.offsetWidth;
+      chip.classList.add(value > old ? "gained" : "spent");
+    }
+    resourceHudValues.set(id, value);
+  }
+  $("fuelMeter").style.width = Math.max(0, Math.min(100, fuel)) + "%";
+  $("baseMeter").style.width =
+    Math.max(0, Math.min(100, (baseHP / baseMax) * 100)) + "%";
+  for (const [id, low] of [
+    ["fuelChip", fuel < 25],
+    ["baseChip", baseHP / baseMax < 0.3],
+  ]) {
+    if (low) $(id).classList.add("warning");
+    else $(id).classList.remove("warning");
+  }
   $("wood").textContent = wood | 0;
   $("coal").textContent = coal | 0;
   $("iron").textContent = iron | 0;
@@ -2693,14 +3008,12 @@ function updatePadTag(p) {
     p.tag,
     title,
     p.constructing
-      ? "離れると完成"
+      ? constructionSites.find((s) => s.p === p)?.t >= 0.78
+        ? "離れると完成"
+        : "組み立て中"
       : locked
         ? "🔒 Lv." + requiredBaseLevel(p.type)
-        : (p.progress > 0
-            ? "建築 " +
-              Math.min(100, Math.round((p.progress / 0.8) * 100)) +
-              "% · "
-            : "") + costText(c),
+        : costText(c),
     ready ? "#86f0b1" : locked ? "#8ea6bd" : "#ffd36b",
   );
   p.tag.userData.pad = true;
@@ -2912,6 +3225,7 @@ function buildFromPad(p) {
   defenseActionConsumed = true;
   wood -= c.wood;
   coal -= c.coal;
+  showResourceDelivery(c, p.x, p.z);
   p.constructing = true;
   p.progress = 0;
   p.g.visible = false;
@@ -3173,6 +3487,8 @@ function update(dt, t) {
   updateEnemies(dt, t);
   updateDefenseCombat(dt, t);
   updateProjectiles(dt, t);
+  updatePlayerFeedback(dt);
+  updateActionStrip();
   ghost.visible = false;
   updateObjective();
   if (fuel <= 0 || baseHP <= 0) gameOver(fuel <= 0);
@@ -3310,6 +3626,7 @@ function gameOver(froze) {
 
 function startGame() {
   resetInput();
+  resourceHudValues.clear();
   resetEffects();
   resetConstruction();
   resetBaseVisual();
@@ -3381,6 +3698,7 @@ function startGame() {
   ["hud", "phaseBar"].forEach((id) => $(id).classList.remove("hidden"));
   $("combo").style.opacity = 0;
   updateHUD();
+  updateObjective();
   showWaveBanner("☀️ DAY 1", "中央拠点を育てよう");
   toast("移動だけで採集・建築・防衛");
 }

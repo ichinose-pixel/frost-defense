@@ -23,8 +23,9 @@ function spawnPickupTrail(x, y, z, colorHex, count, target) {
   for (let i = 0; i < count && flyPickups.length < 128; i++) {
     const mesh =
       pickupPool.pop() || new THREE.Mesh(pickupGeometry, pickupMaterial);
-    const size = 0.12 + Math.random() * 0.06;
-    mesh.scale.setScalar(size);
+    const size = 0.19 + Math.random() * 0.05;
+    mesh.visible = true;
+    mesh.scale.set(size, size, colorHex === 0xe3ba79 ? size * 1.7 : size);
     mesh.material =
       pickupMaterials.get(colorHex) || makePickupMaterial(colorHex);
     mesh.position.set(
@@ -45,7 +46,8 @@ function spawnPickupTrail(x, y, z, colorHex, count, target) {
       followPlayer:
         Math.hypot(target.x - player.position.x, target.z - player.position.z) <
         0.1,
-      life: 0.85 + Math.random() * 0.25,
+      age: 0,
+      life: 1.1 + Math.random() * 0.25,
     });
   }
 }
@@ -99,6 +101,7 @@ function updateParticles(dt) {
   debrisPts.geometry.attributes.color.needsUpdate = true;
   updatePickups(dt);
   updateDeathEffects(dt);
+  updateVoxelBreakup(dt);
 }
 
 function worldPop(textMsg, pos, color = "#fff") {
@@ -145,16 +148,31 @@ function recyclePickup(p) {
 function updatePickups(dt) {
   for (let i = flyPickups.length - 1; i >= 0; i--) {
     const p = flyPickups[i];
+    if (p.delivery) {
+      p.age += dt;
+      const q = Math.max(0, Math.min(1, p.age / p.duration));
+      p.mesh.visible = p.age >= 0;
+      p.mesh.position.lerpVectors(p.from, p.target, q);
+      p.mesh.position.y += Math.sin(q * Math.PI) * 1.3;
+      p.mesh.rotation.x += dt * 5;
+      if (q >= 1) {
+        recyclePickup(p);
+        flyPickups.splice(i, 1);
+      }
+      continue;
+    }
+    p.age += dt;
     p.life -= dt;
     if (p.followPlayer) p.target.copy(player.position).y += 1.1;
     effectDirection.copy(p.target).sub(p.pos);
     const d = Math.max(0.001, effectDirection.length());
     effectDirection.multiplyScalar((8 + d * 1.6) / d);
-    p.vel.lerp(effectDirection, Math.min(1, dt * 7));
+    if (p.age > 0.12) p.vel.lerp(effectDirection, Math.min(1, dt * 10));
     p.pos.addScaledVector(p.vel, dt);
     p.mesh.rotation.x += dt * 5;
     p.mesh.rotation.z += dt * 3;
-    if (p.life <= 0 || d < 0.38) {
+    if (p.life <= 0 || (p.age > 0.12 && d < 0.38)) {
+      if (p.followPlayer && d < 0.38) sfx("pickup");
       recyclePickup(p);
       flyPickups.splice(i, 1);
     }
@@ -195,6 +213,7 @@ function updateDeathEffects(dt) {
   }
 }
 function resetEffects() {
+  resetFeedback();
   for (const p of flyPickups) recyclePickup(p);
   flyPickups = [];
   for (const e of deathEffects) disposeObject(e.g);

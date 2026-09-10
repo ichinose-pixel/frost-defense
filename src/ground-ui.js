@@ -98,14 +98,12 @@ function updatePadTag(p) {
     p.tag,
     title,
     p.constructing
-      ? "離れると完成"
+      ? constructionSites.find((s) => s.p === p)?.t >= 0.78
+        ? "離れると完成"
+        : "組み立て中"
       : locked
         ? "🔒 Lv." + requiredBaseLevel(p.type)
-        : (p.progress > 0
-            ? "建築 " +
-              Math.min(100, Math.round((p.progress / 0.8) * 100)) +
-              "% · "
-            : "") + costText(c),
+        : costText(c),
     ready ? "#86f0b1" : locked ? "#8ea6bd" : "#ffd36b",
   );
   p.tag.userData.pad = true;

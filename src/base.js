@@ -84,6 +84,7 @@ function upgradeBase() {
   wood -= c.wood;
   coal -= c.coal;
   iron -= c.iron;
+  showResourceDelivery(c, 0, 0);
   baseLevel++;
   baseUpgradeProgress = 0;
   baseMax += 120;
@@ -101,6 +102,8 @@ function upgradeBase() {
   }
   refreshBaseVisual();
   updateCampVisual();
+  cargoBounce = 0.3;
+  spawnVoxelBreakup(0, 1.8, 0, 0xffd36b, 20);
   updateHUD();
   sfx("base");
   showWaveBanner(
@@ -211,14 +214,7 @@ function updateAutoFuel(dt, t) {
     coal -= 10;
     fuel = Math.min(100, fuel + 30);
     fuelAutoCD = 1.2;
-    spawnPickupTrail(
-      player.position.x,
-      1,
-      player.position.z,
-      0xffb35c,
-      8,
-      new THREE.Vector3(0, 1, 0),
-    );
+    showResourceDelivery({ coal: 10 }, 0, 0);
     burst(0, 1, 0, 0xffaa44, 12);
     toast("🔥 石炭を自動投入 +30%");
     updateHUD();
