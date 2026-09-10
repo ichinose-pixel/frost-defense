@@ -4,9 +4,17 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import * as THREE from "three";
 
+const htmlIds = new Set(
+  [
+    ...readFileSync(new URL("../index.html", import.meta.url), "utf8").matchAll(
+      /\bid="([^"]+)"/g,
+    ),
+  ].map((m) => m[1]),
+);
+
 // Real Three.js scene/geometry/math. Only DOM, timers and GPU IO are stubbed.
 // These tests do NOT claim to test WebGL rasterization or iPhone compositing.
-function harness(initialize = true) {
+function harness(initialize = true, storage = new Map()) {
   const elements = new Map(),
     listeners = new Map();
   function element(id = "") {
@@ -66,6 +74,7 @@ function harness(initialize = true) {
     body: element("body"),
     documentElement: { clientWidth: 390, style: { setProperty() {} } },
     getElementById(id) {
+      if (!htmlIds.has(id)) return null;
       if (!elements.has(id)) elements.set(id, element(id));
       return elements.get(id);
     },
@@ -94,7 +103,13 @@ function harness(initialize = true) {
   const context = vm.createContext({
     THREE: { ...THREE, WebGLRenderer: Renderer },
     document,
-    window: { visualViewport: { height: 844, addEventListener() {} } },
+    window: {
+      visualViewport: { height: 844, addEventListener() {} },
+      localStorage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+      },
+    },
     innerWidth: 390,
     innerHeight: 844,
     devicePixelRatio: 3,
@@ -110,6 +125,7 @@ function harness(initialize = true) {
   });
   const names = [
     "state",
+    "stages",
     "world",
     "voxel-style",
     "audio",
@@ -540,4 +556,128 @@ test("visual viewport offset and toolbar resize keep canvas and UI in one coordi
   assert.equal(run("joyId"), null);
   run("window.visualViewport=undefined;resizeViewport()");
   assert.equal(run("renderer.testSize.join()"), "390,844");
+});
+
+test("campaign goes through all three actual boss victories, saves immediately and resets each new run", () => {
+  const storage = new Map(),
+    { run } = harness(true, storage);
+  assert.equal(run("startGame(2)"), false);
+  for (let stage = 1; stage <= 3; stage++) {
+    assert.equal(run("currentStage"), stage);
+    assert.equal(run("day"), 1);
+    assert.equal(run("wood"), 90);
+    run(`day=7;phase='night';phaseT=999;waveLeft=0;nightK=1;
+      spawnEnemy(15,15,'boss');enemies.at(-1).hp=0;spawnEnemy(20,20,'raider');
+      update(.01,1);`);
+    assert.equal(run("stageClear"), true);
+    assert.equal(run("running"), false);
+    assert.equal(run("enemies.length"), 0);
+    assert.equal(run("kills"), 1); // Routing does not grant kills or rewards.
+    assert.equal(run("wood"), 94);
+    assert.equal(
+      JSON.parse(storage.get("frost-defense.campaign.v1")).cleared,
+      stage,
+    );
+    assert.equal(run("$('gameover').classList.contains('hidden')"), true);
+    const pausedFuel = run("fuel");
+    run("for(let i=0;i<45;i++)updateVictoryScene(.05)");
+    assert.equal(run("fuel"), pausedFuel);
+    assert.equal(run("victoryScene"), null);
+    assert.equal(run("$('goTitle').textContent"), `🏆 STAGE ${stage} CLEAR`);
+    assert.equal(run("$('gameover').classList.contains('hidden')"), false);
+    run("chooseResultAction()");
+  }
+  assert.equal(run("$('title').classList.contains('hidden')"), false);
+  assert.equal(run("campaign.records.length"), 3);
+  assert.equal(run("startGame(4)"), false);
+  const fresh = harness(false, storage);
+  fresh.run("loadCampaignProgress()");
+  assert.equal(fresh.run("selectedStage"), 3);
+  assert.equal(fresh.run("campaign.records.length"), 3);
+});
+test("campaign reload unlocks only completed stages and failure retries the same stage without save progress", () => {
+  const storage = new Map([
+    [
+      "frost-defense.campaign.v1",
+      JSON.stringify({ version: 1, cleared: 1, records: [] }),
+    ],
+  ]);
+  const { run } = harness(false, storage);
+  run(readFileSync(new URL("../src/bootstrap.js", import.meta.url), "utf8"));
+  assert.equal(run("selectedStage"), 2);
+  assert.equal(run("$('stageSelect').children[2].disabled"), true);
+  run("$('startBtn').click();day=4;fuel=0;update(.01,1)");
+  assert.equal(run("stageClear"), false);
+  assert.equal(run("$('retryBtn').textContent"), "同じステージに再挑戦");
+  run("$('retryBtn').click()");
+  assert.equal(run("currentStage"), 2);
+  assert.equal(run("day"), 1);
+  assert.equal(run("baseLevel"), 1);
+  assert.equal(JSON.parse(storage.get("frost-defense.campaign.v1")).cleared, 1);
+});
+test("blocked, malformed and future-version saves do not stop play or destroy newer save data", () => {
+  const { run } = harness();
+  run(
+    `window.localStorage={getItem(){throw new Error('blocked')},setItem(){throw new Error('blocked')}};loadCampaignProgress();winGame();updateVictoryScene(3)`,
+  );
+  assert.equal(run("campaign.cleared"), 1);
+  assert.match(run("$('resultSaveNote').textContent"), /保存できません/);
+  run("chooseResultAction()");
+  assert.equal(run("currentStage"), 2);
+  for (const raw of ["null", "{broken", '{"version":1,"cleared":99}']) {
+    run(
+      `window.localStorage.getItem=()=>${JSON.stringify(raw)};loadCampaignProgress()`,
+    );
+    assert.equal(run("selectedStage"), 1);
+  }
+  run(
+    `let overwritten=false;window.localStorage={getItem:()=>JSON.stringify({version:99,cleared:2}),setItem(){overwritten=true}};loadCampaignProgress();startGame(1);winGame()`,
+  );
+  assert.equal(run("overwritten"), false);
+  assert.equal(run("campaign.cleared"), 1);
+});
+test("later stages relocate resources and outposts without changing build footprints, rewards or enemy HP", () => {
+  const { run } = harness();
+  run("campaign.cleared=3");
+  for (const stage of [2, 3]) {
+    run(`startGame(${stage});flushWorld()`);
+    assert.equal(run("blockArr.filter(e=>e.b.t==='wood').length>90"), true);
+    assert.equal(run("blockArr.filter(e=>e.b.t==='coal').length>20"), true);
+    assert.equal(
+      run(
+        "blockArr.filter(e=>e.b.t==='wood').every(e=>stageResourceZone('tree',e.x,e.z))",
+      ),
+      true,
+    );
+    assert.equal(run("buildPads.length"), 18);
+    assert.equal(run("groundTagMeshes.length"), 24);
+    assert.equal(run("playerCollidesAt(2.5,6)"), false);
+    assert.equal(run("inst.count<=inst.instanceMatrix.count"), true);
+    run("day=7;spawnEnemy(20,20,'boss')");
+    assert.equal(run("enemies.at(-1).max"), 865);
+    run(
+      "day=1;spawnResourceNode('tree');spawnResourceNode('coal');flushWorld()",
+    );
+    assert.equal(run("Number.isFinite(inst.boundingSphere.radius)"), true);
+  }
+  run("startGame(1)");
+  assert.equal(
+    run("[1,2,3,4,5,6,7].map(nightEnemyCount).join()"),
+    "16,24,35,42,49,56,34",
+  );
+});
+test("flanking pattern changes by stage while every wave still has exactly one Day7 boss", () => {
+  const { run } = harness();
+  run("campaign.cleared=3");
+  for (const stage of [1, 2, 3]) {
+    run(
+      `startGame(${stage});day=7;waveLeft=nightEnemyCount(day);while(waveLeft>0)spawnEnemyPack()`,
+    );
+    assert.equal(run("enemies.filter(e=>e.kind==='boss').length"), 1);
+    assert.equal(run("enemies.length"), 34 + (stage - 1) * 2);
+  }
+  run("startGame(2);const a1=stageSpawnAngle(),a2=stageSpawnAngle()");
+  assert.equal(run("Math.sin(a1)>.95&&Math.sin(a2)<-.95"), true);
+  run("startGame(3);const b1=stageSpawnAngle(),b2=stageSpawnAngle()");
+  assert.equal(run("Math.cos(b1-b2)<-.9"), true);
 });

@@ -6,8 +6,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <title>フロスト・ディフェンス v14.1</title>
-    <link rel="stylesheet" href="styles/game.css?v=14.1" />
+    <title>フロスト・ディフェンス v15</title>
+    <link rel="stylesheet" href="styles/game.css?v=15" />
   </head>
   <body>
     <div id="gameViewport">
@@ -22,7 +22,7 @@
           <small>鉄</small><b>⚙️ <span id="iron">0</span></b>
         </div>
         <div class="chip status">
-          <small>生存日数</small
+          <small>STAGE <span id="stageNumber">1</span></small
           ><b
             ><span id="phase">🌞</span> <span id="day">1</span><em>/ 7日</em></b
           >
@@ -65,11 +65,15 @@
       <div id="runtimeStatus" role="status" hidden></div>
       <div id="title" class="overlay">
         <h1>❄️ フロスト・ディフェンス</h1>
-        <h2>— 集める手応え、育つ防衛拠点 v14.1 —</h2>
+        <h2>— 3つの戦地を守り抜け v15 —</h2>
         <p>
           <b>操作は移動だけ。</b
           ><br />採集・戦闘は自動。建築は設備のそばで少し立ち止まる。
         </p>
+        <div id="stageSelect" aria-label="ステージ選択"></div>
+        <p id="stageDescription"></p>
+        <p id="campaignRecord" hidden></p>
+        <p id="campaignNote"></p>
         <p id="startupError" role="alert" hidden></p>
         <button class="btn" id="startBtn">ゲーム開始</button>
       </div>
@@ -77,6 +81,7 @@
         <h1 id="goTitle">🧊 焚き火が消えた…</h1>
         <h2 id="goSub"></h2>
         <p id="goStat"></p>
+        <p id="resultSaveNote" role="status"></p>
         <button class="btn" id="retryBtn">もう一度挑戦</button>
       </div>
       <div id="upgrade" class="overlay hidden">
@@ -86,6 +91,6 @@
       </div>
     </div>
     <script src="vendor/three-0.160.0.min.js"></script>
-    <script src="dist/game.js?v=14.1"></script>
+    <script src="dist/game.js?v=15"></script>
   </body>
 </html>

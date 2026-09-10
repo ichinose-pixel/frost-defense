@@ -49,6 +49,7 @@ function updateHUD() {
   $("coal").textContent = coal | 0;
   $("iron").textContent = iron | 0;
   $("day").textContent = day;
+  $("stageNumber").textContent = currentStage;
   $("phase").textContent = phase === "day" ? "🌞" : "⚔️";
   $("temp").textContent = temp;
   $("fire").textContent = Math.max(0, fuel | 0);

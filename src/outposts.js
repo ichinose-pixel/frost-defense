@@ -100,13 +100,7 @@ function initOutposts() {
     disposeObject(o.g);
   });
   outposts = [];
-  [
-    ["sawmill", -19, -10],
-    ["coalmine", 19, -9],
-    ["ironmine", 0, 21],
-    ["survivor", -18, 17],
-    ["research", 18, 17],
-  ].forEach(([type, x, z]) => {
+  stageConfig().outposts.forEach(([type, x, z]) => {
     const i = outpostInfo(type),
       g = makeOutpostVisual(type, x, z),
       tag = makeGroundTag(

@@ -1,6 +1,10 @@
 // game system — v12, integrated from the deployed v11.
 
 function update(dt, t) {
+  if (fuel <= 0 || baseHP <= 0) {
+    gameOver(fuel <= 0);
+    return;
+  }
   gameElapsed += dt;
   phaseT -= dt;
   if (phase === "day") {
@@ -14,6 +18,7 @@ function update(dt, t) {
       phaseT = 999;
       waveLeft = nightEnemyCount(day);
       spawnT = 0;
+      stagePackIndex = 0;
       const nm = chooseNightModifier();
       sfx(day === 7 ? "boss" : "wave");
       showWaveBanner(
@@ -60,24 +65,17 @@ function update(dt, t) {
   ghost.visible = false;
   updateObjective();
   if (fuel <= 0 || baseHP <= 0) gameOver(fuel <= 0);
+  else if (day === 7 && waveLeft === 0 && bossDefeated) winGame();
 }
 
 function winGame() {
-  if (stageClear) return;
+  if (stageClear || !running) return;
   stageClear = true;
   running = false;
   resetInput();
+  saveStageClear();
+  beginVictoryScene();
   sfx("base");
-  $("goTitle").textContent = "🏆 STAGE CLEAR";
-  $("goSub").textContent = "Day 7 巨大襲撃を撃破";
-  $("goStat").textContent =
-    "確保拠点 " +
-    activeOutposts().length +
-    " / 5　救助 " +
-    rescued +
-    "人　撃破 " +
-    kills;
-  $("gameover").classList.remove("hidden");
 }
 
 function showUpgrade() {
@@ -181,7 +179,9 @@ function gameOver(froze) {
   running = false;
   resetInput();
   $("goTitle").textContent = froze ? "🧊 焚き火が消えた…" : "☠️ 拠点が陥落…";
-  $("goSub").textContent = "生存記録:" + day + "日目";
+  $("goSub").textContent = "STAGE " + currentStage + " / " + day + "日目";
+  $("retryBtn").textContent = "同じステージに再挑戦";
+  $("resultSaveNote").textContent = "";
   $("goStat").textContent =
     "確保拠点 " +
     activeOutposts().length +
@@ -192,7 +192,18 @@ function gameOver(froze) {
   $("gameover").classList.remove("hidden");
 }
 
-function startGame() {
+function startGame(stage = currentStage) {
+  if (!Number.isInteger(stage) || stage < 1 || stage > unlockedStage())
+    return false;
+  currentStage = stage;
+  selectedStage = stage;
+  victoryScene = null;
+  bossDefeated = false;
+  stagePackIndex = 0;
+  snowPts.material.opacity = 0.85;
+  $("gameover").classList.add("hidden");
+  $("upgrade").classList.add("hidden");
+  $("resultSaveNote").textContent = "";
   resetInput();
   resourceHudValues.clear();
   resetEffects();
@@ -267,11 +278,14 @@ function startGame() {
   $("combo").style.opacity = 0;
   updateHUD();
   updateObjective();
-  showWaveBanner("☀️ DAY 1", "中央拠点を育てよう");
+  camera.position.copy(camLook).add(CAM_OFFSET);
+  camera.lookAt(camLook);
+  showWaveBanner("STAGE " + currentStage, stageConfig().name);
   toast("移動だけで採集・建築・防衛");
 }
 
 // Introductory nights only. Later waves and all enemy statistics are unchanged.
 function nightEnemyCount(n) {
-  return n === 1 ? 16 : n === 2 ? 24 : n === 7 ? 34 : 14 + n * 7;
+  const baseline = n === 1 ? 16 : n === 2 ? 24 : n === 7 ? 34 : 14 + n * 7;
+  return baseline + (n >= 3 ? (currentStage - 1) * 2 : 0);
 }

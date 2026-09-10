@@ -103,6 +103,8 @@ function colorizeEnemy(g, kind) {
 function chooseEnemyKind() {
   if (day === 7 && waveLeft <= 1) return "boss";
   const r = Math.random();
+  if (currentStage >= 2 && day >= 3 && r > 0.82)
+    return currentStage === 3 && r > 0.91 ? "breaker" : "armored";
   if (nightModifier === "wolf" && r < 0.78) return "wolf";
   if (nightModifier === "armored" && r < 0.58) return "armored";
   if (nightModifier === "siege" && r < 0.58) return "breaker";
@@ -171,7 +173,9 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
     }[kind],
     ops = activeOutposts(),
     targetOutpost =
-      kind !== "boss" && ops.length && Math.random() < 0.42
+      kind !== "boss" &&
+      ops.length &&
+      Math.random() < (currentStage === 3 ? 0.52 : 0.42)
         ? ops[Math.floor(Math.random() * ops.length)]
         : null;
   enemies.push({
@@ -190,7 +194,7 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
 
 function spawnEnemyPack() {
   if (waveLeft <= 0) return;
-  const a = Math.random() * Math.PI * 2,
+  const a = stageSpawnAngle(),
     r = R_INNER - 1.2,
     baseX = Math.round(Math.cos(a) * r),
     baseZ = Math.round(Math.sin(a) * r),
@@ -225,6 +229,7 @@ function updateEnemies(dt, t) {
     const e = enemies[i],
       g = e.model.g;
     if (e.hp <= 0) {
+      if (e.kind === "boss") bossDefeated = true;
       burst(g.position.x, 1, g.position.z, 0xff5544, 12);
       spawnDeathEffect(e);
       enemies.splice(i, 1);

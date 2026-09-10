@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { Script } from "node:vm";
 export const sources = [
   "state",
+  "stages",
   "world",
   "voxel-style",
   "audio",

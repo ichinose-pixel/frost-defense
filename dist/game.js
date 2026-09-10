@@ -118,6 +118,271 @@ let contextLost = false,
   uiTime = 0;
 
 
+// ---- stages ----
+// Campaign progression and presentation. Runs restart at Day1; only completed stages persist.
+const STAGES = [
+  {
+    name: "雪原キャンプ",
+    hint: "採集・建築で備え、7日目のボスを撃破",
+    sky: 0xbcd8ee,
+    outposts: [
+      ["sawmill", -19, -10],
+      ["coalmine", 19, -9],
+      ["ironmine", 0, 21],
+      ["survivor", -18, 17],
+      ["research", 18, 17],
+    ],
+  },
+  {
+    name: "凍結渓谷",
+    hint: "西の木材、東の石炭。南北の襲撃に備える",
+    sky: 0xb3d4e3,
+    outposts: [
+      ["sawmill", -20, -14],
+      ["coalmine", 20, 14],
+      ["ironmine", -19, 18],
+      ["survivor", 19, -17],
+      ["research", 0, 23],
+    ],
+  },
+  {
+    name: "吹雪の前線",
+    hint: "南の木材、北の石炭。反対側からの襲撃に注意",
+    sky: 0xa8c3d5,
+    outposts: [
+      ["sawmill", -18, 19],
+      ["coalmine", 19, -19],
+      ["ironmine", -20, -18],
+      ["survivor", 20, 18],
+      ["research", 0, -23],
+    ],
+  },
+];
+const CAMPAIGN_KEY = "frost-defense.campaign.v1";
+let currentStage = 1,
+  selectedStage = 1,
+  campaign = { version: 1, cleared: 0, records: [] };
+let saveMessage = "",
+  campaignWritable = true,
+  victoryScene = null,
+  bossDefeated = false,
+  stagePackIndex = 0;
+function stageConfig() {
+  return STAGES[currentStage - 1];
+}
+function unlockedStage() {
+  return Math.min(STAGES.length, campaign.cleared + 1);
+}
+function loadCampaignProgress() {
+  campaign = { version: 1, cleared: 0, records: [] };
+  saveMessage = "";
+  campaignWritable = true;
+  try {
+    const raw = window.localStorage.getItem(CAMPAIGN_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.version !== 1) {
+        campaignWritable = false;
+        throw new Error("save version");
+      }
+      if (
+        !Number.isInteger(data.cleared) ||
+        data.cleared < 0 ||
+        data.cleared > STAGES.length
+      )
+        throw new Error("save range");
+      campaign.cleared = data.cleared;
+      // Store only bounded, known fields; no saved HTML or arbitrary model state.
+      campaign.records = Array.isArray(data.records)
+        ? data.records
+            .filter(
+              (r) =>
+                r &&
+                Number.isInteger(r.stage) &&
+                r.stage >= 1 &&
+                r.stage <= data.cleared &&
+                ["kills", "rescued", "outposts", "seconds"].every(
+                  (k) => Number.isFinite(r[k]) && r[k] >= 0 && r[k] <= 1000000,
+                ),
+            )
+            .slice(0, STAGES.length)
+            .map((r) => ({
+              stage: r.stage,
+              kills: r.kills,
+              rescued: r.rescued,
+              outposts: Math.min(5, r.outposts),
+              seconds: r.seconds,
+            }))
+        : [];
+    }
+  } catch (error) {
+    saveMessage = "記録を読み込めません。今回はステージ1から開始します。";
+  }
+  selectedStage = unlockedStage();
+}
+function saveStageClear() {
+  campaign.cleared = Math.max(campaign.cleared, currentStage);
+  const record = {
+    stage: currentStage,
+    kills,
+    rescued,
+    outposts: activeOutposts().length,
+    seconds: Math.round(gameElapsed),
+  };
+  const old = campaign.records.findIndex((r) => r.stage === currentStage);
+  if (old < 0) campaign.records.push(record);
+  else campaign.records[old] = record;
+  saveMessage = "";
+  try {
+    if (!campaignWritable) throw new Error("save version");
+    window.localStorage.setItem(CAMPAIGN_KEY, JSON.stringify(campaign));
+  } catch (error) {
+    saveMessage = "記録を保存できませんでした。この画面から次へ進めます。";
+  }
+}
+function renderStageSelection() {
+  const wrap = $("stageSelect");
+  wrap.innerHTML = "";
+  for (let n = 1; n <= STAGES.length; n++) {
+    const b = document.createElement("button");
+    b.className = "stageChoice" + (n === selectedStage ? " selected" : "");
+    b.disabled = n > unlockedStage();
+    b.textContent =
+      (b.disabled ? "🔒 " : n <= campaign.cleared ? "✓ " : "") + "STAGE " + n;
+    b.setAttribute("aria-pressed", String(n === selectedStage));
+    b.onclick = () => {
+      selectedStage = n;
+      renderStageSelection();
+    };
+    wrap.appendChild(b);
+  }
+  $("stageDescription").textContent =
+    STAGES[selectedStage - 1].name + " — " + STAGES[selectedStage - 1].hint;
+  const record = campaign.records.find((r) => r.stage === selectedStage);
+  $("campaignRecord").textContent = record
+    ? "前回クリア：確保 " +
+      record.outposts +
+      "/5 ・ 撃破 " +
+      record.kills +
+      " ・ 救助 " +
+      record.rescued +
+      "人"
+    : "";
+  $("campaignRecord").hidden = !record;
+  $("startBtn").textContent = "STAGE " + selectedStage + " 開始";
+  $("campaignNote").textContent =
+    saveMessage ||
+    (campaign.cleared === STAGES.length
+      ? "全3ステージ制覇！ 好きなステージに再挑戦できます。"
+      : "クリア状況を保存。各ステージはDay1から開始します。");
+}
+function chooseResultAction() {
+  $("gameover").classList.add("hidden");
+  if (!stageClear) {
+    startGame(currentStage);
+    return;
+  }
+  if (currentStage < STAGES.length) {
+    startGame(currentStage + 1);
+    return;
+  }
+  victoryScene = null;
+  stageClear = false;
+  ["hud", "phaseBar"].forEach((id) => $(id).classList.add("hidden"));
+  $("title").classList.remove("hidden");
+  selectedStage = unlockedStage();
+  renderStageSelection();
+}
+function stageResourceZone(type, x, z) {
+  if (currentStage === 1) return true;
+  if (
+    stageConfig().outposts.some(
+      ([, ox, oz]) => Math.abs(x - ox) < 3 && Math.abs(z - oz) < 3,
+    )
+  )
+    return false;
+  if (currentStage === 2) return type === "tree" ? x < -4 : x > 4;
+  return type === "tree" ? z > 6 : z < -6;
+}
+function stageBlockColor(e) {
+  if (e.b.t !== "snow" || currentStage === 1) return COLORS[e.b.t];
+  if (currentStage === 2 && Math.abs(e.x) < 3 && Math.abs(e.z) > 11)
+    return 0x9fbfcf;
+  return currentStage === 3 ? 0xdbe8f0 : COLORS.snow;
+}
+function stageSpawnAngle() {
+  if (currentStage === 1) return Math.random() * Math.PI * 2;
+  // Stage2 alternates north/south; stage3 pairs a flank with its opposite.
+  const sector =
+    currentStage === 2
+      ? (stagePackIndex % 2) * 2 + 1
+      : (Math.floor(stagePackIndex / 2) + (stagePackIndex % 2) * 2 + day) % 4;
+  stagePackIndex++;
+  return (sector * Math.PI) / 2 + (Math.random() - 0.5) * 0.42;
+}
+function beginVictoryScene() {
+  // Rout survivors without granting combat rewards a second time.
+  for (const e of enemies) spawnDeathEffect(e);
+  enemies = [];
+  arrows.forEach((a) => disposeObject(a.m));
+  arrows = [];
+  if (actionStrip) actionStrip.visible = false;
+  $("combo").style.opacity = 0;
+  $("toast").style.opacity = 0;
+  $("flash").style.opacity = 0;
+  $("waveBanner").classList.remove("show");
+  victoryScene = {
+    t: 0,
+    from: camera.position.clone(),
+    look: camLook.clone(),
+    night: nightK,
+    snow: snowPts.material.opacity,
+  };
+  $("phaseCaption").textContent = "防衛成功";
+  $("phaseFill").style.width = "100%";
+}
+function updateVictoryScene(dt) {
+  if (!victoryScene) return;
+  const v = victoryScene;
+  v.t += dt;
+  const q = Math.min(1, v.t / 2.2),
+    ease = q * q * (3 - 2 * q);
+  nightK = v.night * (1 - ease);
+  scene.background
+    .set(stageConfig().sky)
+    .lerp(new THREE.Color(0x0a1226), nightK);
+  scene.fog.color.copy(scene.background);
+  sun.intensity = 1.15 - nightK * 0.95;
+  hemi.intensity = 0.9 - nightK * 0.55;
+  snowPts.material.opacity = v.snow * (1 - ease * 0.8);
+  camera.position.lerpVectors(v.from, new THREE.Vector3(13, 18, 22), ease);
+  camera.lookAt(v.look.x * (1 - ease), 1, v.look.z * (1 - ease));
+  updateParticles(dt);
+  if (q >= 1) {
+    victoryScene = null;
+    $("goTitle").textContent = "🏆 STAGE " + currentStage + " CLEAR";
+    $("goSub").textContent =
+      currentStage === STAGES.length
+        ? "全3ステージ制覇！"
+        : stageConfig().name + " 防衛成功";
+    $("goStat").textContent =
+      "確保拠点 " +
+      activeOutposts().length +
+      " / 5　救助 " +
+      rescued +
+      "人　撃破 " +
+      kills;
+    $("resultSaveNote").textContent = saveMessage;
+    $("retryBtn").textContent =
+      currentStage < STAGES.length
+        ? "STAGE " + (currentStage + 1) + " へ"
+        : "ステージ選択へ";
+    $("gameover").classList.remove("hidden");
+    sfx("upgrade");
+  }
+}
+
+
 // ---- world ----
 // world system — v12, integrated from the deployed v11.
 
@@ -200,6 +465,7 @@ function buildTerrain() {
     if (Math.max(Math.abs(x), Math.abs(z)) < 6 || isReservedBuildArea(x, z))
       continue;
     if (Math.abs(x) <= 4 && z >= 2 && z <= 11) continue;
+    if (!stageResourceZone("tree", x, z)) continue;
     let ok = true;
     for (let y = 1; y <= 5; y++)
       if (blockAt(x, y, z)) {
@@ -216,7 +482,8 @@ function buildTerrain() {
     if (
       Math.random() < 0.35 &&
       !blockAt(x + 2, 1, z + 1) &&
-      !isReservedBuildArea(x + 2, z + 1)
+      !isReservedBuildArea(x + 2, z + 1) &&
+      stageResourceZone("tree", x + 2, z + 1)
     ) {
       for (let y = 1; y <= 2; y++)
         blocks.set(key(x + 2, y, z + 1), { t: "wood", hp: 0 });
@@ -233,7 +500,8 @@ function buildTerrain() {
     if (
       Math.max(Math.abs(x), Math.abs(z)) < 6 ||
       blockAt(x, 1, z) ||
-      isReservedBuildArea(x, z)
+      isReservedBuildArea(x, z) ||
+      !stageResourceZone("coal", x, z)
     )
       continue;
     blocks.set(key(x, 1, z), { t: "coal", hp: 0 });
@@ -267,7 +535,7 @@ function flushWorld() {
     } else {
       m.makeTranslation(e.x, e.y, e.z);
       inst.setMatrixAt(count, m);
-      c.setHex(COLORS[e.b.t]).multiplyScalar(hashJitter(e.x, e.y, e.z));
+      c.setHex(stageBlockColor(e)).multiplyScalar(hashJitter(e.x, e.y, e.z));
       inst.setColorAt(count++, c);
     }
   }
@@ -467,7 +735,10 @@ function disposeObject(object) {
 
 function updateEnvironment(dt, t) {
   nightK += ((phase === "night" ? 1 : 0) - nightK) * Math.min(1, dt * 1.2);
-  const sky = new THREE.Color(0xbcd8ee).lerp(new THREE.Color(0x0a1226), nightK);
+  const sky = new THREE.Color(stageConfig().sky).lerp(
+    new THREE.Color(0x0a1226),
+    nightK,
+  );
   scene.background.copy(sky);
   scene.fog.color.copy(sky);
   sun.intensity = 1.15 - nightK * 0.95;
@@ -1366,13 +1637,7 @@ function initOutposts() {
     disposeObject(o.g);
   });
   outposts = [];
-  [
-    ["sawmill", -19, -10],
-    ["coalmine", 19, -9],
-    ["ironmine", 0, 21],
-    ["survivor", -18, 17],
-    ["research", 18, 17],
-  ].forEach(([type, x, z]) => {
+  stageConfig().outposts.forEach(([type, x, z]) => {
     const i = outpostInfo(type),
       g = makeOutpostVisual(type, x, z),
       tag = makeGroundTag(
@@ -2236,6 +2501,8 @@ function colorizeEnemy(g, kind) {
 function chooseEnemyKind() {
   if (day === 7 && waveLeft <= 1) return "boss";
   const r = Math.random();
+  if (currentStage >= 2 && day >= 3 && r > 0.82)
+    return currentStage === 3 && r > 0.91 ? "breaker" : "armored";
   if (nightModifier === "wolf" && r < 0.78) return "wolf";
   if (nightModifier === "armored" && r < 0.58) return "armored";
   if (nightModifier === "siege" && r < 0.58) return "breaker";
@@ -2304,7 +2571,9 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
     }[kind],
     ops = activeOutposts(),
     targetOutpost =
-      kind !== "boss" && ops.length && Math.random() < 0.42
+      kind !== "boss" &&
+      ops.length &&
+      Math.random() < (currentStage === 3 ? 0.52 : 0.42)
         ? ops[Math.floor(Math.random() * ops.length)]
         : null;
   enemies.push({
@@ -2323,7 +2592,7 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
 
 function spawnEnemyPack() {
   if (waveLeft <= 0) return;
-  const a = Math.random() * Math.PI * 2,
+  const a = stageSpawnAngle(),
     r = R_INNER - 1.2,
     baseX = Math.round(Math.cos(a) * r),
     baseZ = Math.round(Math.sin(a) * r),
@@ -2358,6 +2627,7 @@ function updateEnemies(dt, t) {
     const e = enemies[i],
       g = e.model.g;
     if (e.hp <= 0) {
+      if (e.kind === "boss") bossDefeated = true;
       burst(g.position.x, 1, g.position.z, 0xff5544, 12);
       spawnDeathEffect(e);
       enemies.splice(i, 1);
@@ -2665,6 +2935,7 @@ function spawnResourceNode(type) {
       z = ((Math.random() * 2 - 1) * (R_INNER - 3)) | 0;
     if (Math.max(Math.abs(x), Math.abs(z)) < 7 || isReservedBuildArea(x, z))
       continue;
+    if (!stageResourceZone(type, x, z)) continue;
     if (blockAt(x, 1, z) || blockAt(x, 2, z) || blockAt(x, 3, z)) continue;
     if (type === "tree") {
       for (let y = 1; y <= 3; y++)
@@ -2885,6 +3156,7 @@ function updateHUD() {
   $("coal").textContent = coal | 0;
   $("iron").textContent = iron | 0;
   $("day").textContent = day;
+  $("stageNumber").textContent = currentStage;
   $("phase").textContent = phase === "day" ? "🌞" : "⚔️";
   $("temp").textContent = temp;
   $("fire").textContent = Math.max(0, fuel | 0);
@@ -3436,6 +3708,10 @@ function bindInput() {
 // game system — v12, integrated from the deployed v11.
 
 function update(dt, t) {
+  if (fuel <= 0 || baseHP <= 0) {
+    gameOver(fuel <= 0);
+    return;
+  }
   gameElapsed += dt;
   phaseT -= dt;
   if (phase === "day") {
@@ -3449,6 +3725,7 @@ function update(dt, t) {
       phaseT = 999;
       waveLeft = nightEnemyCount(day);
       spawnT = 0;
+      stagePackIndex = 0;
       const nm = chooseNightModifier();
       sfx(day === 7 ? "boss" : "wave");
       showWaveBanner(
@@ -3495,24 +3772,17 @@ function update(dt, t) {
   ghost.visible = false;
   updateObjective();
   if (fuel <= 0 || baseHP <= 0) gameOver(fuel <= 0);
+  else if (day === 7 && waveLeft === 0 && bossDefeated) winGame();
 }
 
 function winGame() {
-  if (stageClear) return;
+  if (stageClear || !running) return;
   stageClear = true;
   running = false;
   resetInput();
+  saveStageClear();
+  beginVictoryScene();
   sfx("base");
-  $("goTitle").textContent = "🏆 STAGE CLEAR";
-  $("goSub").textContent = "Day 7 巨大襲撃を撃破";
-  $("goStat").textContent =
-    "確保拠点 " +
-    activeOutposts().length +
-    " / 5　救助 " +
-    rescued +
-    "人　撃破 " +
-    kills;
-  $("gameover").classList.remove("hidden");
 }
 
 function showUpgrade() {
@@ -3616,7 +3886,9 @@ function gameOver(froze) {
   running = false;
   resetInput();
   $("goTitle").textContent = froze ? "🧊 焚き火が消えた…" : "☠️ 拠点が陥落…";
-  $("goSub").textContent = "生存記録:" + day + "日目";
+  $("goSub").textContent = "STAGE " + currentStage + " / " + day + "日目";
+  $("retryBtn").textContent = "同じステージに再挑戦";
+  $("resultSaveNote").textContent = "";
   $("goStat").textContent =
     "確保拠点 " +
     activeOutposts().length +
@@ -3627,7 +3899,18 @@ function gameOver(froze) {
   $("gameover").classList.remove("hidden");
 }
 
-function startGame() {
+function startGame(stage = currentStage) {
+  if (!Number.isInteger(stage) || stage < 1 || stage > unlockedStage())
+    return false;
+  currentStage = stage;
+  selectedStage = stage;
+  victoryScene = null;
+  bossDefeated = false;
+  stagePackIndex = 0;
+  snowPts.material.opacity = 0.85;
+  $("gameover").classList.add("hidden");
+  $("upgrade").classList.add("hidden");
+  $("resultSaveNote").textContent = "";
   resetInput();
   resourceHudValues.clear();
   resetEffects();
@@ -3702,13 +3985,16 @@ function startGame() {
   $("combo").style.opacity = 0;
   updateHUD();
   updateObjective();
-  showWaveBanner("☀️ DAY 1", "中央拠点を育てよう");
+  camera.position.copy(camLook).add(CAM_OFFSET);
+  camera.lookAt(camLook);
+  showWaveBanner("STAGE " + currentStage, stageConfig().name);
   toast("移動だけで採集・建築・防衛");
 }
 
 // Introductory nights only. Later waves and all enemy statistics are unchanged.
 function nightEnemyCount(n) {
-  return n === 1 ? 16 : n === 2 ? 24 : n === 7 ? 34 : 14 + n * 7;
+  const baseline = n === 1 ? 16 : n === 2 ? 24 : n === 7 ? 34 : 14 + n * 7;
+  return baseline + (n >= 3 ? (currentStage - 1) * 2 : 0);
 }
 
 
@@ -3750,6 +4036,7 @@ function frame() {
   if (document.hidden || contextLost) return;
   if (running) update(dt, t);
   if (running) updateParticles(dt);
+  else if (victoryScene) updateVictoryScene(dt);
   flushWorld();
   camera.updateMatrixWorld();
   uiTime += dt;
@@ -3763,6 +4050,8 @@ function frame() {
 }
 function boot() {
   try {
+    loadCampaignProgress();
+    renderStageSelection();
     // Fit the title/errors as well, even if GPU initialization fails.
     resizeViewport();
     addEventListener("resize", resizeViewport);
@@ -3799,12 +4088,9 @@ function boot() {
         console.warn("Audio unavailable", error);
       }
       $("title").classList.add("hidden");
-      startGame();
+      startGame(selectedStage);
     });
-    $("retryBtn").addEventListener("click", () => {
-      $("gameover").classList.add("hidden");
-      startGame();
-    });
+    $("retryBtn").addEventListener("click", chooseResultAction);
     frame();
   } catch (error) {
     reportStartupError(error);

@@ -79,6 +79,7 @@ function buildTerrain() {
     if (Math.max(Math.abs(x), Math.abs(z)) < 6 || isReservedBuildArea(x, z))
       continue;
     if (Math.abs(x) <= 4 && z >= 2 && z <= 11) continue;
+    if (!stageResourceZone("tree", x, z)) continue;
     let ok = true;
     for (let y = 1; y <= 5; y++)
       if (blockAt(x, y, z)) {
@@ -95,7 +96,8 @@ function buildTerrain() {
     if (
       Math.random() < 0.35 &&
       !blockAt(x + 2, 1, z + 1) &&
-      !isReservedBuildArea(x + 2, z + 1)
+      !isReservedBuildArea(x + 2, z + 1) &&
+      stageResourceZone("tree", x + 2, z + 1)
     ) {
       for (let y = 1; y <= 2; y++)
         blocks.set(key(x + 2, y, z + 1), { t: "wood", hp: 0 });
@@ -112,7 +114,8 @@ function buildTerrain() {
     if (
       Math.max(Math.abs(x), Math.abs(z)) < 6 ||
       blockAt(x, 1, z) ||
-      isReservedBuildArea(x, z)
+      isReservedBuildArea(x, z) ||
+      !stageResourceZone("coal", x, z)
     )
       continue;
     blocks.set(key(x, 1, z), { t: "coal", hp: 0 });
@@ -146,7 +149,7 @@ function flushWorld() {
     } else {
       m.makeTranslation(e.x, e.y, e.z);
       inst.setMatrixAt(count, m);
-      c.setHex(COLORS[e.b.t]).multiplyScalar(hashJitter(e.x, e.y, e.z));
+      c.setHex(stageBlockColor(e)).multiplyScalar(hashJitter(e.x, e.y, e.z));
       inst.setColorAt(count++, c);
     }
   }
@@ -346,7 +349,10 @@ function disposeObject(object) {
 
 function updateEnvironment(dt, t) {
   nightK += ((phase === "night" ? 1 : 0) - nightK) * Math.min(1, dt * 1.2);
-  const sky = new THREE.Color(0xbcd8ee).lerp(new THREE.Color(0x0a1226), nightK);
+  const sky = new THREE.Color(stageConfig().sky).lerp(
+    new THREE.Color(0x0a1226),
+    nightK,
+  );
   scene.background.copy(sky);
   scene.fog.color.copy(sky);
   sun.intensity = 1.15 - nightK * 0.95;

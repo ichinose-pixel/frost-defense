@@ -35,6 +35,7 @@ function frame() {
   if (document.hidden || contextLost) return;
   if (running) update(dt, t);
   if (running) updateParticles(dt);
+  else if (victoryScene) updateVictoryScene(dt);
   flushWorld();
   camera.updateMatrixWorld();
   uiTime += dt;
@@ -48,6 +49,8 @@ function frame() {
 }
 function boot() {
   try {
+    loadCampaignProgress();
+    renderStageSelection();
     // Fit the title/errors as well, even if GPU initialization fails.
     resizeViewport();
     addEventListener("resize", resizeViewport);
@@ -84,12 +87,9 @@ function boot() {
         console.warn("Audio unavailable", error);
       }
       $("title").classList.add("hidden");
-      startGame();
+      startGame(selectedStage);
     });
-    $("retryBtn").addEventListener("click", () => {
-      $("gameover").classList.add("hidden");
-      startGame();
-    });
+    $("retryBtn").addEventListener("click", chooseResultAction);
     frame();
   } catch (error) {
     reportStartupError(error);
