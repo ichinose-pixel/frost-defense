@@ -184,12 +184,25 @@ function spawnDeathEffect(e) {
     disposeObject(e.model.g);
     return;
   }
+  if (e.model.flight) {
+    e.model.shadow.visible =
+      e.model.warning.visible =
+      e.model.breath.visible =
+        false;
+  }
   const g = e.model.g,
     dx = g.position.x - pPos.x,
     dz = g.position.z - pPos.z,
     d = Math.hypot(dx, dz) || 1;
   e.bar.visible = false;
-  deathEffects.push({ g, t: 0, x: dx / d, z: dz / d, scale: g.scale.clone() });
+  deathEffects.push({
+    g,
+    t: 0,
+    x: dx / d,
+    z: dz / d,
+    scale: g.scale.clone(),
+    duration: e.kind === "boss" ? 1.4 : 0.42,
+  });
   burst(
     g.position.x,
     1,
@@ -206,8 +219,8 @@ function updateDeathEffects(dt) {
     e.g.position.z += e.z * dt * 2.5;
     e.g.position.y += dt * (2 - e.t * 10);
     e.g.rotation.z += dt * 3;
-    e.g.scale.copy(e.scale).multiplyScalar(Math.max(0, 1 - e.t / 0.42));
-    if (e.t >= 0.42) {
+    e.g.scale.copy(e.scale).multiplyScalar(Math.max(0, 1 - e.t / e.duration));
+    if (e.t >= e.duration) {
       disposeObject(e.g);
       deathEffects.splice(i, 1);
     }

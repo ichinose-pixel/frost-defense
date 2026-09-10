@@ -66,6 +66,9 @@ function sfx(name) {
     tone(392, 0.1, "triangle", 0.08, 1.2);
     setTimeout(() => tone(587, 0.12, "triangle", 0.08, 1.2), 90);
     setTimeout(() => tone(784, 0.18, "sine", 0.07, 1.05), 190);
+  } else if (name === "frostBreath") {
+    tone(90, 0.28, "sawtooth", 0.07, 1.8);
+    tone(280, 0.22, "triangle", 0.05, 0.55);
   } else if (name === "boss") {
     tone(70, 0.45, "sawtooth", 0.12, 0.55);
     setTimeout(() => tone(55, 0.55, "square", 0.09, 0.5), 240);

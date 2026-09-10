@@ -205,6 +205,7 @@ function startGame(stage = currentStage) {
   $("upgrade").classList.add("hidden");
   $("resultSaveNote").textContent = "";
   resetInput();
+  resetDragon();
   resourceHudValues.clear();
   resetEffects();
   resetConstruction();

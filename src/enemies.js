@@ -130,8 +130,13 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
           : kind === "breaker"
             ? 1.15
             : 1,
-    model = kind === "wolf" ? makeWolf() : makeRaider(scale);
-  colorizeEnemy(model.g, kind);
+    model =
+      kind === "boss"
+        ? makeDragon()
+        : kind === "wolf"
+          ? makeWolf()
+          : makeRaider(scale);
+  if (kind !== "boss") colorizeEnemy(model.g, kind);
   const hpBase =
       {
         wolf: 26,
@@ -146,6 +151,7 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
   const bb = box(kind === "boss" ? 1.25 : 0.8, 0.1, 0.05, 0x222222);
   bb.position.y = kind === "boss" ? 3.4 : 2.1;
   model.g.add(bb);
+  model.g.userData.hpBack = bb;
   const bf = box(
     kind === "boss" ? 1.25 : 0.8,
     0.12,
@@ -190,6 +196,7 @@ function spawnEnemy(x = null, z = null, kindOverride = null) {
     walkT: Math.random() * 6,
     targetOutpost,
   });
+  if (kind === "boss") announceDragon(enemies.at(-1));
 }
 
 function spawnEnemyPack() {
@@ -250,6 +257,10 @@ function updateEnemies(dt, t) {
       );
       toast(combo >= 3 ? "🔥 " + combo + " COMBO!" : "撃破! +4🌲 +2🪨");
       updateHUD();
+      continue;
+    }
+    if (e.kind === "boss") {
+      updateDragon(e, dt);
       continue;
     }
     e.walkT += dt * e.sp * 3;
@@ -339,11 +350,7 @@ function updateProjectiles(dt, t) {
     const a = arrows[i];
     a.life -= dt;
     if (a.home && a.home.hp > 0) {
-      const dir = a.home.model.g.position
-        .clone()
-        .add(new THREE.Vector3(0, 0.8, 0))
-        .sub(a.m.position)
-        .normalize();
+      const dir = enemyAimPoint(a.home).sub(a.m.position).normalize();
       a.v.lerp(dir.multiplyScalar(30), 0.25);
     }
     a.v.y -= (a.home ? 0 : 4) * dt;
@@ -353,11 +360,11 @@ function updateProjectiles(dt, t) {
     if (!dead)
       for (const e of enemies)
         if (
-          a.m.position.distanceTo(
-            e.model.g.position.clone().add(new THREE.Vector3(0, 0.8, 0)),
-          ) < 0.8
+          enemyTargetable(e) &&
+          a.m.position.distanceTo(enemyAimPoint(e)) <
+            (e.kind === "boss" ? 1.25 : 0.8)
         ) {
-          e.hp -= a.dmg;
+          damageEnemy(e, a.dmg);
           burst(a.m.position.x, a.m.position.y, a.m.position.z, 0xffe08a, 3);
           dead = true;
           break;

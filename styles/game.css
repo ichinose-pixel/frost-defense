@@ -654,3 +654,57 @@ body {
     margin-bottom: 6px;
   }
 }
+
+#bossPanel {
+  grid-column: 1/-1;
+  background: #173746;
+  border: 1px solid #94e7e0;
+  border-radius: 8px;
+  padding: 5px 10px;
+  color: #ddfffa;
+}
+#bossPanel > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+.bossTrack {
+  height: 5px;
+  background: #315166;
+  margin: 4px 0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+#bossFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #65c0d9, #aaffdf);
+  transition: width 0.12s;
+}
+#bossState {
+  font-size: 10px;
+}
+#bossDirection {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 32;
+  pointer-events: none;
+  color: #caffee;
+  background: #173746;
+  border: 1px solid #94e7e0;
+  border-radius: 8px;
+  padding: 4px;
+  text-align: center;
+  font-size: 10px;
+}
+#bossArrow {
+  display: block;
+  font-size: 20px;
+  line-height: 22px;
+}
+#gameViewport.boss-active #toast {
+  top: calc(190px + env(safe-area-inset-top));
+}
+#gameViewport.boss-active #combo {
+  top: calc(225px + env(safe-area-inset-top));
+}

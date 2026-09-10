@@ -56,6 +56,7 @@ function updateWorkers(dt, t) {
       let enemy = null,
         bd = 6.2;
       for (const e of enemies) {
+        if (!enemyTargetable(e)) continue;
         const d = e.model.g.position.distanceTo(w.g.position);
         if (d < bd) {
           bd = d;
@@ -74,11 +75,7 @@ function updateWorkers(dt, t) {
         if (w.shootCD <= 0) {
           w.shootCD = 1.05;
           const from = w.g.position.clone().add(new THREE.Vector3(0, 1.15, 0)),
-            dir = enemy.model.g.position
-              .clone()
-              .add(new THREE.Vector3(0, 0.8, 0))
-              .sub(from)
-              .normalize();
+            dir = enemyAimPoint(enemy).sub(from).normalize();
           shootArrow(
             from,
             dir,

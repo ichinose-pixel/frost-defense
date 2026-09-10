@@ -26,7 +26,7 @@
       display: block;
     }
   </style>
-  <h1>v15 HUD / layout fixture</h1>
+  <h1>v16 HUD / layout fixture</h1>
   <p>
     実際の index.html と styles/game.css
     を使用。3D・ゲームロジックは実行しません。
@@ -48,6 +48,12 @@
     ];
     for (const [width, height, label] of states) {
       const clone = hud.cloneNode(true);
+      if (width === 390) {
+        clone.querySelector("#bossPanel").hidden = false;
+        clone.querySelector("#bossHealth").textContent = "67%";
+        clone.querySelector("#bossFill").style.width = "67%";
+        clone.querySelector("#bossState").textContent = "氷息の予兆 → 拠点";
+      }
       clone.querySelector("#wood").textContent = width === 320 ? "90" : "9999";
       clone.querySelector("#coal").textContent = width === 320 ? "36" : "9999";
       clone.querySelector("#iron").textContent = width === 320 ? "0" : "9999";
@@ -66,7 +72,7 @@
         frame = document.createElement("iframe");
       caption.textContent = `横幅 ${width}px — ${label}`;
       frame.width = width;
-      frame.height = 160;
+      frame.height = 220;
       frame.title = caption.textContent;
       frame.srcdoc = `<!doctype html><html lang="ja"><meta charset="utf-8"><base href="${new URL("../", location.href)}"><link rel="stylesheet" href="styles/game.css?v=15"><style>html,body{background:#bad4e2;}</style><body><div id="gameViewport">${clone.outerHTML}</div></body></html>`;
       figure.append(caption, frame);

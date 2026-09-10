@@ -135,6 +135,7 @@ function harness(initialize = true, storage = new Map()) {
     "outposts",
     "buildings",
     "player",
+    "dragon",
     "enemies",
     "resources",
     "ui",
@@ -680,4 +681,61 @@ test("flanking pattern changes by stage while every wave still has exactly one D
   assert.equal(run("Math.sin(a1)>.95&&Math.sin(a2)<-.95"), true);
   run("startGame(3);const b1=stageSpawnAngle(),b2=stageSpawnAngle()");
   assert.equal(run("Math.cos(b1-b2)<-.9"), true);
+});
+
+test("dragon has a flying silhouette, brief entrance and arrows hit its airborne body", () => {
+  const { run } = harness();
+  run("day=7;phase='night';spawnEnemy(0,6,'boss');const dragon=enemies[0]");
+  assert.equal(run("dragon.max"), 865);
+  assert.equal(run("dragon.model.wings.length"), 2);
+  assert.equal(run("enemyAimPoint(dragon).y>3"), true);
+  assert.equal(run("damageEnemy(dragon,100)"), false);
+  run("updateDragon(dragon,0)");
+  assert.equal(run("Number.isFinite(dragon.model.g.position.x)"), true);
+  run("updateDragon(dragon,2.21)");
+  assert.equal(run("damageEnemy(dragon,10)"), true);
+  run(
+    "shootArrow(enemyAimPoint(dragon),new THREE.Vector3(0,0,1),25,dragon);updateProjectiles(.001,0)",
+  );
+  assert.equal(run("dragon.hp"), 830);
+});
+test("dragon flies past walls and warns before one breath damages base; retry clears boss UI", () => {
+  const { run } = harness();
+  run(
+    "const pad=buildPads.find(p=>p.x===0&&p.z===6);buildFromPad(pad);updateBuildPads(1);day=7;phase='night';spawnEnemy(0,8,'boss');const dragon=enemies[0];for(let i=0;i<65;i++)updateDragon(dragon,.05)",
+  );
+  assert.equal(run("blockAt(0,1,6).hp"), 220);
+  assert.equal(run("baseHP"), 300);
+  run("while(dragon.breathClock<3.3)updateDragon(dragon,.05)");
+  assert.equal(run("dragon.model.warning.visible"), true);
+  assert.equal(run("baseHP"), 300);
+  run("while(dragon.breathFlash<=0)updateDragon(dragon,.05)");
+  assert.equal(run("baseHP"), 262);
+  assert.equal(run("dragon.model.breath.visible"), true);
+  run("updateDragonUI()");
+  assert.equal(run("$('bossPanel').hidden"), false);
+  run("const oldDragon=dragon.model.g;startGame()");
+  assert.equal(run("oldDragon.parent"), null);
+  assert.equal(run("activeDragon"), null);
+  assert.equal(run("$('bossPanel').hidden"), true);
+});
+test("boss direction stays inside visible viewport and dedicated defeat effect reaches stage clear", () => {
+  const { run } = harness();
+  run(
+    "day=7;phase='night';waveLeft=0;spawnEnemy(25,25,'boss');const dragon=enemies[0];camera.position.set(0,12,14);camera.lookAt(0,1,0);camera.updateMatrixWorld();updateDragonUI()",
+  );
+  assert.equal(run("$('bossDirection').hidden"), false);
+  assert.equal(
+    run(
+      "parseFloat($('bossDirection').style.left)>=30&&parseFloat($('bossDirection').style.left)<=360",
+    ),
+    true,
+  );
+  run("dragon.hp=0;update(.01,1);updateDragonUI()");
+  assert.equal(run("$('bossState').textContent"), "撃破！");
+  assert.equal(run("deathEffects.some(e=>e.duration===1.4)"), true);
+  run("for(let i=0;i<45;i++)updateVictoryScene(.05);updateDragonUI()");
+  assert.equal(run("deathEffects.length"), 0);
+  assert.equal(run("$('goTitle').textContent"), "🏆 STAGE 1 CLEAR");
+  assert.equal(run("$('bossPanel').hidden"), true);
 });

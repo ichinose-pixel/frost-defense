@@ -176,6 +176,7 @@ function updatePlayer(dt, t) {
     let target = null,
       bd = 7.8;
     for (const e of enemies) {
+      if (!enemyTargetable(e)) continue;
       const d = e.model.g.position.distanceTo(player.position);
       if (d < bd) {
         bd = d;
@@ -185,11 +186,7 @@ function updatePlayer(dt, t) {
     if (target) {
       shootCD = 0.42;
       const from = pPos.clone().add(new THREE.Vector3(0, 1.35, 0)),
-        dir = target.model.g.position
-          .clone()
-          .add(new THREE.Vector3(0, 0.8, 0))
-          .sub(from)
-          .normalize();
+        dir = enemyAimPoint(target).sub(from).normalize();
       shootArrow(
         from.clone().add(dir.clone().multiplyScalar(0.5)),
         dir,

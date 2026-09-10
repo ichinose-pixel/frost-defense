@@ -12,6 +12,7 @@ export const sources = [
   "outposts",
   "buildings",
   "player",
+  "dragon",
   "enemies",
   "resources",
   "ui",

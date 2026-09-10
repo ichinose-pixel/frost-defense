@@ -379,6 +379,7 @@ function updateDefenseCombat(dt, t) {
     let best = null,
       bd = 1e9;
     for (const e of enemies) {
+      if (!enemyTargetable(e)) continue;
       const d = g.position.distanceTo(e.model.g.position);
       if (d < range && d < bd) {
         bd = d;
@@ -388,11 +389,7 @@ function updateDefenseCombat(dt, t) {
     if (best) {
       g._cd = rate;
       const from = new THREE.Vector3(tx, ty + 2.1, tz),
-        dir = best.model.g.position
-          .clone()
-          .add(new THREE.Vector3(0, 0.8, 0))
-          .sub(from)
-          .normalize();
+        dir = enemyAimPoint(best).sub(from).normalize();
       shootArrow(from, dir, dmg, best);
       sfx("shoot");
     }
@@ -407,15 +404,17 @@ function updateDefenseCombat(dt, t) {
     const range = 4.2 + lv * 0.65,
       targets = enemies.filter(
         (e) =>
+          enemyTargetable(e) &&
           Math.hypot(e.model.g.position.x - x, e.model.g.position.z - z) <
-          range,
+            range,
       );
     if (targets.length) {
       sfx("flame");
       g._cd = Math.max(0.55, 1.15 - lv * 0.18);
       for (const e of targets.slice(0, 3 + lv)) {
-        e.hp -= 10 + lv * 9;
-        burst(e.model.g.position.x, 0.8, e.model.g.position.z, 0xff6b38, 4);
+        damageEnemy(e, 10 + lv * 9);
+        const aim = enemyAimPoint(e);
+        burst(aim.x, aim.y, aim.z, 0xff6b38, 4);
       }
       burst(x, 1.5, z, 0xff8a42, 10);
     }

@@ -45,6 +45,7 @@ function frame() {
     updateWorldLabels();
   }
   projectGroundTags(t);
+  updateDragonUI();
   renderer.render(scene, camera);
 }
 function boot() {
