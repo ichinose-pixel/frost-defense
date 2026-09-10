@@ -215,7 +215,6 @@ function beginVictoryScene() {
     from: camera.position.clone(),
     look: camLook.clone(),
     night: nightK,
-    snow: snowPts.material.opacity,
   };
   $("phaseCaption").textContent = "防衛成功";
   $("phaseFill").style.width = "100%";
@@ -227,13 +226,8 @@ function updateVictoryScene(dt) {
   const q = Math.min(1, v.t / 2.2),
     ease = q * q * (3 - 2 * q);
   nightK = v.night * (1 - ease);
-  scene.background
-    .set(stageConfig().sky)
-    .lerp(new THREE.Color(0x0a1226), nightK);
-  scene.fog.color.copy(scene.background);
   sun.intensity = 1.15 - nightK * 0.95;
   hemi.intensity = 0.9 - nightK * 0.55;
-  snowPts.material.opacity = v.snow * (1 - ease * 0.8);
   camera.position.lerpVectors(v.from, new THREE.Vector3(13, 18, 22), ease);
   camera.lookAt(v.look.x * (1 - ease), 1, v.look.z * (1 - ease));
   updateParticles(dt);

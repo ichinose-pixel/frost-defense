@@ -370,8 +370,7 @@ function updateDefenseCombat(dt, t) {
     const [tx, ty, tz] = k.split(",").map(Number),
       st = defenseState.get(k),
       lv = st ? st.level : 1,
-      range =
-        (T_RANGE + (lv - 1) * 2.1) * (nightModifier === "blizzard" ? 0.75 : 1),
+      range = T_RANGE + (lv - 1) * 2.1,
       rate = Math.max(0.34, T_RATE - (lv - 1) * 0.12),
       dmg = Math.round(turretDmg * (1 + (lv - 1) * 0.55));
     g._cd = (g._cd || 0) - dt;

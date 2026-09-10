@@ -97,8 +97,6 @@ let sun,
   fireGroup,
   flamePts,
   flameData,
-  snowPts,
-  snowData,
   debrisPts,
   debrisData,
   ghost,
@@ -336,7 +334,6 @@ function beginVictoryScene() {
     from: camera.position.clone(),
     look: camLook.clone(),
     night: nightK,
-    snow: snowPts.material.opacity,
   };
   $("phaseCaption").textContent = "防衛成功";
   $("phaseFill").style.width = "100%";
@@ -348,13 +345,8 @@ function updateVictoryScene(dt) {
   const q = Math.min(1, v.t / 2.2),
     ease = q * q * (3 - 2 * q);
   nightK = v.night * (1 - ease);
-  scene.background
-    .set(stageConfig().sky)
-    .lerp(new THREE.Color(0x0a1226), nightK);
-  scene.fog.color.copy(scene.background);
   sun.intensity = 1.15 - nightK * 0.95;
   hemi.intensity = 0.9 - nightK * 0.55;
-  snowPts.material.opacity = v.snow * (1 - ease * 0.8);
   camera.position.lerpVectors(v.from, new THREE.Vector3(13, 18, 22), ease);
   camera.lookAt(v.look.x * (1 - ease), 1, v.look.z * (1 - ease));
   updateParticles(dt);
@@ -554,8 +546,8 @@ function rebuild() {
 
 function initScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xbcd8ee);
-  scene.fog = new THREE.Fog(0xbcd8ee, 25, 70);
+  scene.background = new THREE.Color(0x182a3a);
+  scene.fog = null;
   camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 200);
   camera.position.set(8.6, 12, 14);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -605,35 +597,14 @@ function initScene() {
     fg,
     new THREE.PointsMaterial({
       color: 0xffaa33,
-      size: 0.34,
+      size: 6,
+      sizeAttenuation: false,
       transparent: true,
       opacity: 0.95,
       depthWrite: false,
     }),
   );
   scene.add(flamePts);
-  snowData = Array.from({ length: 720 }, () => ({
-    x: (Math.random() * 2 - 1) * 26,
-    y: Math.random() * 18,
-    z: (Math.random() * 2 - 1) * 26,
-    v: 1.5 + Math.random() * 2.5,
-  }));
-  const sg = new THREE.BufferGeometry();
-  sg.setAttribute(
-    "position",
-    new THREE.BufferAttribute(new Float32Array(720 * 3), 3),
-  );
-  snowPts = new THREE.Points(
-    sg,
-    new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.09,
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-    }),
-  );
-  scene.add(snowPts);
   debrisData = Array.from({ length: 200 }, () => ({
     life: 0,
     x: 0,
@@ -658,9 +629,10 @@ function initScene() {
   debrisPts = new THREE.Points(
     dg,
     new THREE.PointsMaterial({
-      size: 0.18,
+      size: 3,
+      sizeAttenuation: false,
       vertexColors: true,
-      transparent: true,
+      transparent: false,
       depthWrite: false,
     }),
   );
@@ -735,12 +707,6 @@ function disposeObject(object) {
 
 function updateEnvironment(dt, t) {
   nightK += ((phase === "night" ? 1 : 0) - nightK) * Math.min(1, dt * 1.2);
-  const sky = new THREE.Color(stageConfig().sky).lerp(
-    new THREE.Color(0x0a1226),
-    nightK,
-  );
-  scene.background.copy(sky);
-  scene.fog.color.copy(sky);
   sun.intensity = 1.15 - nightK * 0.95;
   hemi.intensity = 0.9 - nightK * 0.55;
   const sa = (phase === "day" ? 1 - phaseT / 30 : 0.5) * Math.PI;
@@ -928,22 +894,8 @@ function updateParticles(dt) {
     fp[i * 3 + 2] = Math.cos(i * 5 + s * 8) * 0.25 * (1 - s);
   });
   flamePts.geometry.attributes.position.needsUpdate = true;
-  flamePts.material.size = 0.2 + fr * 0.25;
+  flamePts.material.size = 3 + fr * 5;
   flamePts.visible = fuel > 0;
-  const sp = snowPts.geometry.attributes.position.array;
-  snowData.forEach((p, i) => {
-    p.y -= p.v * dt * (1 + nightK * 0.5);
-    p.x += Math.sin(p.y * 0.5) * dt * 0.5;
-    if (p.y < 0) {
-      p.y = 18;
-      p.x = (Math.random() * 2 - 1) * 26;
-      p.z = (Math.random() * 2 - 1) * 26;
-    }
-    sp[i * 3] = p.x;
-    sp[i * 3 + 1] = p.y;
-    sp[i * 3 + 2] = p.z;
-  });
-  snowPts.geometry.attributes.position.needsUpdate = true;
   const dp = debrisPts.geometry.attributes.position.array,
     dc = debrisPts.geometry.attributes.color.array;
   debrisData.forEach((d, i) => {
@@ -1760,14 +1712,11 @@ function damageOutpost(o, dmg) {
 
 function chooseNightModifier() {
   const pool =
-    day <= 2
-      ? ["normal", "wolf"]
-      : ["blizzard", "wolf", "fuel", "armored", "siege"];
+    day <= 2 ? ["normal", "wolf"] : ["wolf", "fuel", "armored", "siege"];
   if (day === 6) pool.push("bossOmen");
   nightModifier = pool[Math.floor(Math.random() * pool.length)];
   const map = {
     normal: ["静かな夜", "通常襲撃"],
-    blizzard: ["猛吹雪", "見張り台射程 -25%"],
     wolf: ["狼の夜", "高速の狼が大量出現"],
     fuel: ["燃料危機", "燃料消費 +70%"],
     armored: ["重装襲来", "高耐久兵が増加"],
@@ -2151,8 +2100,7 @@ function updateDefenseCombat(dt, t) {
     const [tx, ty, tz] = k.split(",").map(Number),
       st = defenseState.get(k),
       lv = st ? st.level : 1,
-      range =
-        (T_RANGE + (lv - 1) * 2.1) * (nightModifier === "blizzard" ? 0.75 : 1),
+      range = T_RANGE + (lv - 1) * 2.1,
       rate = Math.max(0.34, T_RATE - (lv - 1) * 0.12),
       dmg = Math.round(turretDmg * (1 + (lv - 1) * 0.55));
     g._cd = (g._cd || 0) - dt;
@@ -4144,7 +4092,6 @@ function startGame(stage = currentStage) {
   victoryScene = null;
   bossDefeated = false;
   stagePackIndex = 0;
-  snowPts.material.opacity = 0.85;
   $("gameover").classList.add("hidden");
   $("upgrade").classList.add("hidden");
   $("resultSaveNote").textContent = "";
@@ -4238,26 +4185,20 @@ function nightEnemyCount(n) {
 
 // ---- bootstrap ----
 // One animation loop. Rendering failures are visible rather than an unresponsive start button.
+let renderWidth = 0,
+  renderHeight = 0;
 function resizeViewport() {
+  // CSS owns position and sizing. Never add VisualViewport offsets to a fixed root.
+  const rect = $("gameViewport").getBoundingClientRect(),
+    width = Math.max(1, Math.round(rect.width || innerWidth)),
+    height = Math.max(1, Math.round(rect.height || innerHeight));
+  if (!renderer || (width === renderWidth && height === renderHeight)) return;
   resetInput();
-  const visual = window.visualViewport,
-    width = Math.max(
-      1,
-      visual?.width || document.documentElement.clientWidth || innerWidth,
-    ),
-    height = Math.max(1, visual?.height || innerHeight),
-    left = visual?.offsetLeft || 0,
-    top = visual?.offsetTop || 0,
-    style = $("gameViewport").style;
-  style.setProperty("--viewport-width", width + "px");
-  style.setProperty("--viewport-height", height + "px");
-  style.setProperty("--viewport-left", left + "px");
-  style.setProperty("--viewport-top", top + "px");
-  if (renderer) renderer.setSize(width, height);
-  if (camera) {
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-  }
+  renderWidth = width;
+  renderHeight = height;
+  renderer.setSize(width, height);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
 }
 function reportStartupError(error) {
   console.error("Frost Defense startup failed", error);
@@ -4300,6 +4241,9 @@ function boot() {
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) resizeViewport();
     });
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(resizeViewport).observe($("gameViewport"));
+    }
     initScene();
     renderer.domElement.id = "gameCanvas";
     renderer.domElement.setAttribute("aria-label", "移動操作用ゲーム画面");

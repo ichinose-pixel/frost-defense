@@ -168,8 +168,8 @@ function rebuild() {
 
 function initScene() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xbcd8ee);
-  scene.fog = new THREE.Fog(0xbcd8ee, 25, 70);
+  scene.background = new THREE.Color(0x182a3a);
+  scene.fog = null;
   camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 200);
   camera.position.set(8.6, 12, 14);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -219,35 +219,14 @@ function initScene() {
     fg,
     new THREE.PointsMaterial({
       color: 0xffaa33,
-      size: 0.34,
+      size: 6,
+      sizeAttenuation: false,
       transparent: true,
       opacity: 0.95,
       depthWrite: false,
     }),
   );
   scene.add(flamePts);
-  snowData = Array.from({ length: 720 }, () => ({
-    x: (Math.random() * 2 - 1) * 26,
-    y: Math.random() * 18,
-    z: (Math.random() * 2 - 1) * 26,
-    v: 1.5 + Math.random() * 2.5,
-  }));
-  const sg = new THREE.BufferGeometry();
-  sg.setAttribute(
-    "position",
-    new THREE.BufferAttribute(new Float32Array(720 * 3), 3),
-  );
-  snowPts = new THREE.Points(
-    sg,
-    new THREE.PointsMaterial({
-      color: 0xffffff,
-      size: 0.09,
-      transparent: true,
-      opacity: 0.85,
-      depthWrite: false,
-    }),
-  );
-  scene.add(snowPts);
   debrisData = Array.from({ length: 200 }, () => ({
     life: 0,
     x: 0,
@@ -272,9 +251,10 @@ function initScene() {
   debrisPts = new THREE.Points(
     dg,
     new THREE.PointsMaterial({
-      size: 0.18,
+      size: 3,
+      sizeAttenuation: false,
       vertexColors: true,
-      transparent: true,
+      transparent: false,
       depthWrite: false,
     }),
   );
@@ -349,12 +329,6 @@ function disposeObject(object) {
 
 function updateEnvironment(dt, t) {
   nightK += ((phase === "night" ? 1 : 0) - nightK) * Math.min(1, dt * 1.2);
-  const sky = new THREE.Color(stageConfig().sky).lerp(
-    new THREE.Color(0x0a1226),
-    nightK,
-  );
-  scene.background.copy(sky);
-  scene.fog.color.copy(sky);
   sun.intensity = 1.15 - nightK * 0.95;
   hemi.intensity = 0.9 - nightK * 0.55;
   const sa = (phase === "day" ? 1 - phaseT / 30 : 0.5) * Math.PI;

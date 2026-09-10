@@ -1,24 +1,18 @@
 // One animation loop. Rendering failures are visible rather than an unresponsive start button.
+let renderWidth = 0,
+  renderHeight = 0;
 function resizeViewport() {
+  // CSS owns position and sizing. Never add VisualViewport offsets to a fixed root.
+  const rect = $("gameViewport").getBoundingClientRect(),
+    width = Math.max(1, Math.round(rect.width || innerWidth)),
+    height = Math.max(1, Math.round(rect.height || innerHeight));
+  if (!renderer || (width === renderWidth && height === renderHeight)) return;
   resetInput();
-  const visual = window.visualViewport,
-    width = Math.max(
-      1,
-      visual?.width || document.documentElement.clientWidth || innerWidth,
-    ),
-    height = Math.max(1, visual?.height || innerHeight),
-    left = visual?.offsetLeft || 0,
-    top = visual?.offsetTop || 0,
-    style = $("gameViewport").style;
-  style.setProperty("--viewport-width", width + "px");
-  style.setProperty("--viewport-height", height + "px");
-  style.setProperty("--viewport-left", left + "px");
-  style.setProperty("--viewport-top", top + "px");
-  if (renderer) renderer.setSize(width, height);
-  if (camera) {
-    camera.aspect = width / height;
-    camera.updateProjectionMatrix();
-  }
+  renderWidth = width;
+  renderHeight = height;
+  renderer.setSize(width, height);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
 }
 function reportStartupError(error) {
   console.error("Frost Defense startup failed", error);
@@ -61,6 +55,9 @@ function boot() {
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) resizeViewport();
     });
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(resizeViewport).observe($("gameViewport"));
+    }
     initScene();
     renderer.domElement.id = "gameCanvas";
     renderer.domElement.setAttribute("aria-label", "移動操作用ゲーム画面");

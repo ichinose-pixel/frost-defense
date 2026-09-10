@@ -200,7 +200,6 @@ function startGame(stage = currentStage) {
   victoryScene = null;
   bossDefeated = false;
   stagePackIndex = 0;
-  snowPts.material.opacity = 0.85;
   $("gameover").classList.add("hidden");
   $("upgrade").classList.add("hidden");
   $("resultSaveNote").textContent = "";

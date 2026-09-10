@@ -531,32 +531,39 @@ test("HUD distinguishes night countdown and remaining enemies; danger meters cla
   assert.equal(run("$('baseChip').classList.contains('warning')"), true);
 });
 
-test("visual viewport offset and toolbar resize keep canvas and UI in one coordinate system", () => {
+test("CSS viewport rect controls canvas; visual offsets never translate root or reallocate unchanged buffers", () => {
   const { run } = harness(false);
   run(readFileSync(new URL("../src/bootstrap.js", import.meta.url), "utf8"));
-  run(`const properties={};$('gameViewport').style.setProperty=(k,v)=>properties[k]=v;
-    renderer.setSize=(w,h)=>{renderer.testSize=[w,h]};
-    window.visualViewport={width:360,height:640,offsetLeft:12,offsetTop:140};
-    keys.KeyW=true;resizeViewport();`);
-  assert.equal(run("properties['--viewport-top']"), "140px");
-  assert.equal(run("properties['--viewport-left']"), "12px");
-  assert.equal(run("properties['--viewport-height']"), "640px");
-  assert.equal(run("renderer.testSize.join()"), "360,640");
+  run(`let sizes=[];renderer.setSize=(w,h)=>sizes.push([w,h]);
+    window.visualViewport={width:120,height:200,offsetLeft:12,offsetTop:140};
+    $('gameViewport').getBoundingClientRect=()=>({left:0,top:0,width:360,height:640});
+    keys.KeyW=true;resizeViewport()`);
+  assert.equal(run("sizes.at(-1).join()"), "360,640");
   assert.equal(run("camera.aspect"), 360 / 640);
   assert.equal(run("Object.keys(keys).length"), 0);
-  run(`startGame();renderer.domElement.getBoundingClientRect=()=>({left:12,top:140,width:360,height:640,right:372,bottom:780});
-    renderer.domElement.pointerdown({pointerId:4,button:0,clientX:132,clientY:500,preventDefault(){}});`);
-  assert.equal(run("joyBase._ox"), 120);
-  assert.equal(run("joyBase._oy"), 360);
-  assert.match(run("joyKnob.style.cssText"), /left:93px;top:333px/);
+  run("keys.KeyW=true;resizeViewport();resizeViewport()");
+  assert.equal(run("sizes.length"), 1);
+  assert.equal(run("keys.KeyW"), true);
   run(
-    `window.visualViewport={width:844,height:390,offsetTop:0,offsetLeft:0};resizeViewport()`,
+    `$('gameViewport').getBoundingClientRect=()=>({left:0,top:0,width:844,height:390});resizeViewport()`,
   );
-  assert.equal(run("properties['--viewport-top']"), "0px");
-  assert.equal(run("renderer.testSize.join()"), "844,390");
-  assert.equal(run("joyId"), null);
+  assert.equal(run("sizes.at(-1).join()"), "844,390");
+  assert.equal(run("Object.keys(keys).length"), 0);
   run("window.visualViewport=undefined;resizeViewport()");
-  assert.equal(run("renderer.testSize.join()"), "390,844");
+  assert.equal(run("sizes.length"), 2);
+});
+
+test("weather is absent and remaining particles cannot expand with camera proximity", () => {
+  const { run } = harness();
+  assert.equal(run("scene.fog"), null);
+  assert.equal(run("scene.children.filter(o=>o.isPoints).length"), 2);
+  assert.equal(run("flamePts.material.sizeAttenuation"), false);
+  assert.equal(run("debrisPts.material.sizeAttenuation"), false);
+  run(
+    "day=5;for(let i=0;i<100;i++){chooseNightModifier();if(nightModifier==='blizzard')throw new Error('weather enabled')};updateParticles(.05);winGame();updateVictoryScene(3);startGame()",
+  );
+  assert.equal(run("scene.fog"), null);
+  assert.equal(run("scene.background.getHex()"), 0x182a3a);
 });
 
 test("campaign goes through all three actual boss victories, saves immediately and resets each new run", () => {

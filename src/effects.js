@@ -64,22 +64,8 @@ function updateParticles(dt) {
     fp[i * 3 + 2] = Math.cos(i * 5 + s * 8) * 0.25 * (1 - s);
   });
   flamePts.geometry.attributes.position.needsUpdate = true;
-  flamePts.material.size = 0.2 + fr * 0.25;
+  flamePts.material.size = 3 + fr * 5;
   flamePts.visible = fuel > 0;
-  const sp = snowPts.geometry.attributes.position.array;
-  snowData.forEach((p, i) => {
-    p.y -= p.v * dt * (1 + nightK * 0.5);
-    p.x += Math.sin(p.y * 0.5) * dt * 0.5;
-    if (p.y < 0) {
-      p.y = 18;
-      p.x = (Math.random() * 2 - 1) * 26;
-      p.z = (Math.random() * 2 - 1) * 26;
-    }
-    sp[i * 3] = p.x;
-    sp[i * 3 + 1] = p.y;
-    sp[i * 3 + 2] = p.z;
-  });
-  snowPts.geometry.attributes.position.needsUpdate = true;
   const dp = debrisPts.geometry.attributes.position.array,
     dc = debrisPts.geometry.attributes.color.array;
   debrisData.forEach((d, i) => {
