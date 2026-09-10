@@ -1,5 +1,6 @@
 {
   "devDependencies": {
+    "@capacitor/cli": "8.5.1",
     "prettier": "3.9.6",
     "three": "0.160.0"
   },
@@ -10,6 +11,18 @@
     "build": "node scripts/build.mjs",
     "test": "node --test tests/*.test.mjs",
     "format": "prettier --write src scripts tests styles index.html README.md docs",
-    "check": "npm run build && npm test"
+    "check": "npm run build && npm test",
+    "mobile:build": "node scripts/build-mobile.mjs",
+    "mobile:sync": "npm run mobile:build && cap sync",
+    "mobile:android": "npm run mobile:sync && cap open android",
+    "mobile:ios": "npm run mobile:sync && cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.1",
+    "@capacitor/core": "8.5.1",
+    "@capacitor/ios": "8.5.1"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

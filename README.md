@@ -52,3 +52,10 @@ python -m http.server 8080
 - `npm run check` が通った変更をGitHubに反映し、既存PagesのURLで確認します。
 - GPUのないCIでのテストはiPhone Safariの実機確認を代替しません。
 - 解放済みステージと直近クリア戦績は同じブラウザに保存。途中のDay・資材・設備は保存せず、再開時は選んだステージのDay1から開始します。
+
+## iOS／Androidアプリ版
+
+ブラウザ版と同じゲームコードをCapacitorでアプリに同梱します。
+`npm run mobile:sync`で両OSへ反映し、`npm run mobile:android`／`npm run mobile:ios`でIDEを開きます。
+AndroidテストAPKはGitHub Actionsの「Android test app」から取得できます（ビルド成功後）。
+環境構築・保存の仕様・実機確認事項は[アプリ開発手順](docs/mobile.md)を参照してください。

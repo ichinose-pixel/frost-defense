@@ -1,2 +1,7 @@
 node_modules/
 .test-output/
+
+# Capacitor generated web assets and local signing configuration
+www/
+*.keystore
+*.jks

@@ -1,0 +1,7 @@
+{
+  "appId": "io.github.ichinosepixel.frostdefense",
+  "appName": "Frost Defense",
+  "webDir": "www",
+  "backgroundColor": "#182a3a",
+  "ios": { "contentInset": "never" }
+}
